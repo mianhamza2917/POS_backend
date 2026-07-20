@@ -136,6 +136,92 @@ Authorization: Bearer <your_jwt_token>
 
 ---
 
+### 4. Forgot Password
+**Endpoint:** `POST /api/auth/forgotpassword`
+
+**Request Headers:**
+```
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "email": "hamza@gmail.com"
+}
+```
+
+**Validation Rules:**
+- `email`: Required, valid email format
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Password reset email sent"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "No user found with this email"
+}
+```
+
+**Note:** This endpoint will send an email with a reset link to the user's email address. The email will contain a link like: `http://localhost:5000/api/auth/resetpassword/<resettoken>`
+
+---
+
+### 5. Reset Password
+**Endpoint:** `PUT /api/auth/resetpassword/:resettoken`
+
+**Request Headers:**
+```
+Content-Type: application/json
+```
+
+**URL Parameter:**
+- `resettoken`: The reset token received from the forgot password email
+
+**Request Body:**
+```json
+{
+  "password": "newpassword123"
+}
+```
+
+**Validation Rules:**
+- `password`: Required, minimum 6 characters
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Password reset successful",
+  "data": {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "Hamza",
+    "email": "hamza@gmail.com",
+    "role": "user",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "Invalid or expired reset token"
+}
+```
+
+**Note:** The reset token expires after 30 minutes. After successful password reset, a new JWT token is returned.
+
+---
+
 ## Error Response Format
 
 All errors follow this format:
