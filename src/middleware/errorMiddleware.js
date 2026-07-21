@@ -14,33 +14,41 @@ const errorHandler = (err, req, res, next) => {
 
   // Mongoose duplicate key error
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
+    const field = Object.keys(err.keyValue || {})[0] || 'field';
+    const message = `${field} already exists`;
     return res.status(400).json({
       success: false,
-      message: `${field} already exists`,
+      message,
+      errors: [message],
     });
   }
 
   // Mongoose cast error (invalid ObjectId)
   if (err.name === 'CastError') {
+    const message = 'Resource not found / Invalid ID format';
     return res.status(400).json({
       success: false,
-      message: 'Resource not found',
+      message,
+      errors: [message],
     });
   }
 
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
+    const message = 'Invalid token';
     return res.status(401).json({
       success: false,
-      message: 'Invalid token',
+      message,
+      errors: [message],
     });
   }
 
   if (err.name === 'TokenExpiredError') {
+    const message = 'Token expired';
     return res.status(401).json({
       success: false,
-      message: 'Token expired',
+      message,
+      errors: [message],
     });
   }
 
@@ -51,6 +59,7 @@ const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json({
     success: false,
     message,
+    errors: [message],
     stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
   });
 };

@@ -14,9 +14,11 @@ const registerUser = async (req, res) => {
     const userExists = await User.findOne({ email });
 
     if (userExists) {
+      const message = 'User already exists with this email';
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this email',
+        message,
+        errors: [message],
       });
     }
 
@@ -45,7 +47,7 @@ const registerUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error during registration',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -60,10 +62,12 @@ const loginUser = async (req, res) => {
     // Check if user exists (include password for comparison)
     const user = await User.findOne({ email }).select('+password');
 
-    if (!user) {
+    if (!user || user.isDeleted) {
+      const message = 'Invalid email or password';
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message,
+        errors: [message],
       });
     }
 
@@ -71,9 +75,20 @@ const loginUser = async (req, res) => {
     const isPasswordMatch = await user.matchPassword(password);
 
     if (!isPasswordMatch) {
+      const message = 'Invalid email or password';
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password',
+        message,
+        errors: [message],
+      });
+    }
+
+    if (user.isDisabled) {
+      const message = 'Account is disabled. Please contact administrator.';
+      return res.status(403).json({
+        success: false,
+        message,
+        errors: [message],
       });
     }
 
@@ -95,7 +110,7 @@ const loginUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error during login',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -108,15 +123,18 @@ const getUserProfile = async (req, res) => {
     // req.user is set by authMiddleware
     const user = await User.findById(req.user._id);
 
-    if (!user) {
+    if (!user || user.isDeleted) {
+      const message = 'User not found';
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message,
+        errors: [message],
       });
     }
 
     res.status(200).json({
       success: true,
+      message: 'User profile retrieved successfully',
       data: {
         _id: user._id,
         name: user.name,
@@ -130,7 +148,7 @@ const getUserProfile = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error while fetching profile',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -145,10 +163,12 @@ const forgotPassword = async (req, res) => {
     // Find user by email
     const user = await User.findOne({ email });
 
-    if (!user) {
+    if (!user || user.isDeleted) {
+      const message = 'No user found with this email';
       return res.status(404).json({
         success: false,
-        message: 'No user found with this email',
+        message,
+        errors: [message],
       });
     }
 
@@ -194,6 +214,7 @@ const forgotPassword = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Password reset email sent',
+      data: {},
     });
   } catch (error) {
     // Clear reset token fields if error occurs
@@ -207,7 +228,7 @@ const forgotPassword = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Email could not be sent',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -229,10 +250,12 @@ const resetPassword = async (req, res) => {
       resetPasswordExpire: { $gt: Date.now() },
     });
 
-    if (!user) {
+    if (!user || user.isDeleted) {
+      const message = 'Invalid or expired reset token';
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired reset token',
+        message,
+        errors: [message],
       });
     }
 
@@ -261,8 +284,32 @@ const resetPassword = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error during password reset',
-      error: error.message,
+      errors: [error.message],
     });
+  }
+};
+
+// @desc    Change password (logged-in user)
+// @route   PUT /api/auth/changepassword
+// @access  Private
+const changePassword = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user || user.isDeleted) {
+      return res.status(404).json({ success: false, message: 'User not found', errors: ['User not found'] });
+    }
+
+    const isMatch = await user.matchPassword(req.body.currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect', errors: ['Current password is incorrect'] });
+    }
+
+    user.password = req.body.newPassword;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Password changed successfully', data: {} });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error while changing password', errors: [error.message] });
   }
 };
 
@@ -272,4 +319,5 @@ module.exports = {
   getUserProfile,
   forgotPassword,
   resetPassword,
+  changePassword,
 };

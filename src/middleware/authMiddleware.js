@@ -16,10 +16,19 @@ const protect = async (req, res, next) => {
       // Get user from token (exclude password)
       req.user = await User.findById(decoded.id).select('-password');
 
-      if (!req.user) {
+      if (!req.user || req.user.isDeleted) {
         return res.status(401).json({
           success: false,
-          message: 'User not found',
+          message: 'User not found or account removed',
+          errors: ['User not found or account removed'],
+        });
+      }
+
+      if (req.user.isDisabled) {
+        return res.status(403).json({
+          success: false,
+          message: 'Account is disabled. Please contact administrator.',
+          errors: ['Account is disabled. Please contact administrator.'],
         });
       }
 
@@ -29,6 +38,7 @@ const protect = async (req, res, next) => {
       return res.status(401).json({
         success: false,
         message: 'Not authorized, token failed',
+        errors: ['Not authorized, token failed'],
       });
     }
   }
@@ -37,11 +47,12 @@ const protect = async (req, res, next) => {
     return res.status(401).json({
       success: false,
       message: 'Not authorized, no token',
+      errors: ['Not authorized, no token'],
     });
   }
 };
 
-// Admin middleware
+// Admin middleware (retained for backward compatibility)
 const admin = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
     next();
@@ -49,8 +60,24 @@ const admin = (req, res, next) => {
     return res.status(403).json({
       success: false,
       message: 'Not authorized as an admin',
+      errors: ['Not authorized as an admin'],
     });
   }
 };
 
-module.exports = { protect, admin };
+// Generic role authorization middleware
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      const message = `User role '${req.user ? req.user.role : 'none'}' is not authorized to access this route`;
+      return res.status(403).json({
+        success: false,
+        message,
+        errors: [message],
+      });
+    }
+    next();
+  };
+};
+
+module.exports = { protect, admin, authorize };

@@ -1,6 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { registerUser, loginUser, getUserProfile, forgotPassword, resetPassword } = require('../controllers/authController');
+const { registerUser, loginUser, getUserProfile, forgotPassword, resetPassword, changePassword } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
 
@@ -93,6 +93,20 @@ router.put(
   ],
   validate,
   resetPassword
+);
+
+// @route   PUT /api/auth/changepassword
+// @desc    Change password
+// @access  Private
+router.put(
+  '/changepassword',
+  protect,
+  [
+    body('currentPassword').notEmpty().withMessage('Current password is required'),
+    body('newPassword').notEmpty().isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  ],
+  validate,
+  changePassword
 );
 
 module.exports = router;

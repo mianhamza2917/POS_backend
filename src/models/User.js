@@ -26,8 +26,32 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
+    enum: ['admin', 'manager', 'cashier'],
+    default: 'cashier',
+  },
+  isDisabled: {
+    type: Boolean,
+    default: false,
+  },
+  branchId: {
+    type: String,
+    default: 'main',
+    trim: true,
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+  deletedAt: {
+    type: Date,
   },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
