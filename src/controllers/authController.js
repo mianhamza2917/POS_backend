@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { ERROR_MSGS, HTTP_STATUS } = require('../utils/constants');
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -14,9 +14,10 @@ const registerUser = async (req, res) => {
     const userExists = await User.findOne({ email });
 
     if (userExists) {
-      return res.status(400).json({
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
-        message: 'User already exists with this email',
+        message: ERROR_MSGS.DUPLICATE_FIELD('User'),
+        errors: [ERROR_MSGS.DUPLICATE_FIELD('User')],
       });
     }
 
@@ -30,7 +31,7 @@ const registerUser = async (req, res) => {
     // Generate JWT token
     const token = generateToken(user._id);
 
-    res.status(201).json({
+    res.status(HTTP_STATUS.CREATED).json({
       success: true,
       message: 'User registered successfully',
       data: {
@@ -42,10 +43,10 @@ const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(HTTP_STATUS.SERVER_ERROR).json({
       success: false,
       message: 'Server error during registration',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -60,10 +61,11 @@ const loginUser = async (req, res) => {
     // Check if user exists (include password for comparison)
     const user = await User.findOne({ email }).select('+password');
 
-    if (!user) {
-      return res.status(401).json({
+    if (!user || user.isDeleted) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: 'Invalid email or password',
+        message: ERROR_MSGS.INVALID_CREDENTIALS,
+        errors: [ERROR_MSGS.INVALID_CREDENTIALS],
       });
     }
 
@@ -71,16 +73,25 @@ const loginUser = async (req, res) => {
     const isPasswordMatch = await user.matchPassword(password);
 
     if (!isPasswordMatch) {
-      return res.status(401).json({
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
-        message: 'Invalid email or password',
+        message: ERROR_MSGS.INVALID_CREDENTIALS,
+        errors: [ERROR_MSGS.INVALID_CREDENTIALS],
+      });
+    }
+
+    if (user.isDisabled) {
+      return res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: ERROR_MSGS.ACCOUNT_DISABLED,
+        errors: [ERROR_MSGS.ACCOUNT_DISABLED],
       });
     }
 
     // Generate JWT token
     const token = generateToken(user._id);
 
-    res.status(200).json({
+    res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Login successful',
       data: {
@@ -92,10 +103,10 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(HTTP_STATUS.SERVER_ERROR).json({
       success: false,
       message: 'Server error during login',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -108,15 +119,17 @@ const getUserProfile = async (req, res) => {
     // req.user is set by authMiddleware
     const user = await User.findById(req.user._id);
 
-    if (!user) {
-      return res.status(404).json({
+    if (!user || user.isDeleted) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
         success: false,
         message: 'User not found',
+        errors: ['User not found'],
       });
     }
 
-    res.status(200).json({
+    res.status(HTTP_STATUS.OK).json({
       success: true,
+      message: 'User profile retrieved successfully',
       data: {
         _id: user._id,
         name: user.name,
@@ -127,10 +140,10 @@ const getUserProfile = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(HTTP_STATUS.SERVER_ERROR).json({
       success: false,
       message: 'Server error while fetching profile',
-      error: error.message,
+      errors: [error.message],
     });
   }
 };
@@ -139,16 +152,17 @@ const getUserProfile = async (req, res) => {
 // @route   POST /api/auth/forgotpassword
 // @access  Public
 const forgotPassword = async (req, res) => {
-  const { email } = req.body;
-
   try {
-    // Find user by email
+    const { email } = req.body;
+
+    // Find user
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({
+    if (!user || user.isDeleted) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
         success: false,
         message: 'No user found with this email',
+        errors: ['No user found with this email'],
       });
     }
 
@@ -169,45 +183,21 @@ const forgotPassword = async (req, res) => {
     // Create reset URL
     const resetUrl = `${req.protocol}://${req.get('host')}/api/auth/resetpassword/${resetToken}`;
 
-    // Create email transporter
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
+    // DEVELOPMENT MODE: Return token in response
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Password reset token generated successfully',
+      data: {
+        resetToken,
+        resetUrl,
+        expiresIn: '30 minutes',
       },
     });
-
-    // Email message
-    const message = {
-      from: `${process.env.EMAIL_FROM}`,
-      to: user.email,
-      subject: 'Password Reset Request',
-      text: `You are receiving this email because you (or someone else) has requested a password reset for your account.\n\nPlease click on the following link to reset your password:\n\n${resetUrl}\n\nIf you did not request this, please ignore this email and your password will remain unchanged.\n`,
-    };
-
-    // Send email
-    await transporter.sendMail(message);
-
-    res.status(200).json({
-      success: true,
-      message: 'Password reset email sent',
-    });
   } catch (error) {
-    // Clear reset token fields if error occurs
-    const user = await User.findOne({ email });
-    if (user) {
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-    }
-
-    res.status(500).json({
+    return res.status(HTTP_STATUS.SERVER_ERROR).json({
       success: false,
-      message: 'Email could not be sent',
-      error: error.message,
+      message: 'Server error while generating reset token',
+      errors: [error.message],
     });
   }
 };
@@ -229,10 +219,11 @@ const resetPassword = async (req, res) => {
       resetPasswordExpire: { $gt: Date.now() },
     });
 
-    if (!user) {
-      return res.status(400).json({
+    if (!user || user.isDeleted) {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: 'Invalid or expired reset token',
+        errors: ['Invalid or expired reset token'],
       });
     }
 
@@ -246,7 +237,7 @@ const resetPassword = async (req, res) => {
     // Generate new JWT token
     const token = generateToken(user._id);
 
-    res.status(200).json({
+    res.status(HTTP_STATUS.OK).json({
       success: true,
       message: 'Password reset successful',
       data: {
@@ -258,11 +249,35 @@ const resetPassword = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(HTTP_STATUS.SERVER_ERROR).json({
       success: false,
       message: 'Server error during password reset',
-      error: error.message,
+      errors: [error.message],
     });
+  }
+};
+
+// @desc    Change password (logged-in user)
+// @route   PUT /api/auth/changepassword
+// @access  Private
+const changePassword = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user || user.isDeleted) {
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: 'User not found', errors: ['User not found'] });
+    }
+
+    const isMatch = await user.matchPassword(req.body.currentPassword);
+    if (!isMatch) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: 'Current password is incorrect', errors: ['Current password is incorrect'] });
+    }
+
+    user.password = req.body.newPassword;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Password changed successfully', data: {} });
+  } catch (error) {
+    res.status(HTTP_STATUS.SERVER_ERROR).json({ success: false, message: 'Server error while changing password', errors: [error.message] });
   }
 };
 
@@ -272,4 +287,5 @@ module.exports = {
   getUserProfile,
   forgotPassword,
   resetPassword,
+  changePassword,
 };

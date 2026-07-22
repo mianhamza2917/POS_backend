@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const { USER_ROLES, FIELD_LENGTHS, BCRYPT, EMAIL_REGEX, DEFAULT_BRANCH_ID } = require('../utils/constants');
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -14,36 +15,59 @@ const userSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
     match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+      EMAIL_REGEX,
       'Please provide a valid email',
     ],
   },
   password: {
     type: String,
     required: [true, 'Please provide a password'],
-    minlength: [6, 'Password must be at least 6 characters'],
-    select: false, // Don't return password by default in queries
+    minlength: [FIELD_LENGTHS.PASSWORD_MIN, 'Password must be at least 6 characters'],
+    select: false,
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
+    enum: USER_ROLES.ALL,
+    default: USER_ROLES.CASHIER,
+  },
+  isDisabled: {
+    type: Boolean,
+    default: false,
+  },
+  branchId: {
+    type: String,
+    default: DEFAULT_BRANCH_ID,
+    trim: true,
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+  deletedAt: {
+    type: Date,
   },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
 }, {
-  timestamps: true, // Automatically adds createdAt and updatedAt
+  timestamps: true,
 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) {
     return next();
   }
 
   try {
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(BCRYPT.SALT_ROUNDS);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
