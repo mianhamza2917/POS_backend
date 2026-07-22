@@ -3,8 +3,9 @@ const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const { generateInvoiceNumber } = require('../utils/invoiceHelper');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
+const { SORT_FIELDS, PAYMENT_METHODS, PAYMENT_STATUSES } = require('../utils/constants');
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'totalAmount', 'invoiceNumber', 'paymentMethod'];
+const ALLOWED_SORT_FIELDS = SORT_FIELDS.SALES;
 
 // @desc    Create a new sale (atomic — uses sequential ops for standalone MongoDB)
 // @route   POST /api/sales
@@ -67,7 +68,7 @@ const createSale = async (req, res, next) => {
       taxAmount,
       totalAmount,
       profit,
-      paymentMethod: paymentMethod || 'cash',
+      paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
       notes,
       branchId: req.user.branchId || 'main',
       createdBy: req.user._id,
@@ -150,7 +151,7 @@ const getSaleById = async (req, res, next) => {
   }
 };
 
-// @desc    Soft delete sale
+// @desc    Soft delete sale (restores product stock)
 // @route   DELETE /api/sales/:id
 // @access  Private (Admin only)
 const deleteSale = async (req, res, next) => {
@@ -160,16 +161,189 @@ const deleteSale = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
     }
 
+    // Restore product stock before soft-deleting
+    for (const item of sale.items) {
+      await Product.findOneAndUpdate(
+        { _id: item.product, isDeleted: { $ne: true } },
+        { $inc: { stock: item.quantity } }
+      );
+    }
+
     sale.isDeleted = true;
     sale.deletedAt = new Date();
     sale.updatedBy = req.user._id;
     await sale.save();
 
-    res.status(200).json({ success: true, message: 'Sale deleted successfully', data: {} });
+    res.status(200).json({ success: true, message: 'Sale deleted and stock restored successfully', data: {} });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { createSale, getSales, getSaleById, deleteSale };
+// @desc    Update sale details (items, discount, tax, notes, payment)
+// @route   PUT /api/sales/:id
+// @access  Private (Admin, Manager)
+const updateSale = async (req, res, next) => {
+  try {
+    const sale = await Sale.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!sale) {
+      return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
+    }
 
+    // Only allow updating non-cancelled/non-refunded sales
+    if (sale.paymentStatus === PAYMENT_STATUSES.REFUNDED) {
+      return res.status(400).json({ success: false, message: 'Cannot update a refunded sale', errors: ['Sale is refunded'] });
+    }
+
+    const { customer, items, discountAmount, taxAmount, paymentMethod, paymentStatus, notes } = req.body;
+
+    if (customer !== undefined) sale.customer = customer;
+    if (paymentMethod !== undefined) {
+      if (!PAYMENT_METHODS.ALL.includes(paymentMethod)) {
+        return res.status(400).json({ success: false, message: 'Invalid payment method', errors: ['Invalid payment method'] });
+      }
+      sale.paymentMethod = paymentMethod;
+    }
+    if (paymentStatus !== undefined) {
+      if (!PAYMENT_STATUSES.ALL.includes(paymentStatus)) {
+        return res.status(400).json({ success: false, message: 'Invalid payment status', errors: ['Invalid payment status'] });
+      }
+      sale.paymentStatus = paymentStatus;
+    }
+    if (notes !== undefined) sale.notes = notes;
+
+    // If items are being updated, recalculate totals
+    if (items !== undefined) {
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ success: false, message: 'Sale must have at least one item', errors: ['Invalid items'] });
+      }
+
+      // Restore original stock for previous items
+      for (const oldItem of sale.items) {
+        await Product.findOneAndUpdate(
+          { _id: oldItem.product, isDeleted: { $ne: true } },
+          { $inc: { stock: oldItem.quantity } }
+        );
+      }
+
+      let subtotal = 0;
+      let profit = 0;
+      const enrichedItems = [];
+
+      for (const item of items) {
+        const product = await Product.findOne({ _id: item.product, isDeleted: { $ne: true } });
+        if (!product) {
+          return res.status(404).json({ success: false, message: `Product not found: ${item.product}`, errors: [`Product not found: ${item.product}`] });
+        }
+        if (product.stock < item.quantity) {
+          return res.status(400).json({ success: false, message: `Insufficient stock for: ${product.name}`, errors: [`Insufficient stock for: ${product.name}`] });
+        }
+
+        const unitPrice = item.unitPrice !== undefined ? item.unitPrice : product.price;
+        const itemDiscount = item.discount || 0;
+        const total = (unitPrice * item.quantity) - itemDiscount;
+        subtotal += total;
+        profit += (unitPrice - (product.costPrice || 0)) * item.quantity - itemDiscount;
+
+        enrichedItems.push({
+          product: product._id,
+          name: product.name,
+          sku: product.sku,
+          quantity: item.quantity,
+          unitPrice,
+          discount: itemDiscount,
+          total,
+        });
+
+        product.stock -= item.quantity;
+        await product.save();
+      }
+
+      sale.items = enrichedItems;
+      sale.subtotal = subtotal;
+      sale.profit = profit;
+    }
+
+    const discAmount = discountAmount !== undefined ? discountAmount : sale.discountAmount;
+    const taxAmt = taxAmount !== undefined ? taxAmount : sale.taxAmount;
+    const sub = sale.subtotal;
+
+    if (discAmount > sub) {
+      return res.status(400).json({ success: false, message: 'Discount amount cannot exceed subtotal', errors: ['Discount exceeds subtotal'] });
+    }
+
+    if (discAmount !== undefined) sale.discountAmount = discAmount;
+    if (taxAmt !== undefined) sale.taxAmount = taxAmt;
+    sale.totalAmount = sub - discAmount + taxAmt;
+    if (sale.totalAmount < 0) {
+      return res.status(400).json({ success: false, message: 'Total amount cannot be negative', errors: ['Invalid total amount'] });
+    }
+
+    sale.updatedBy = req.user._id;
+    await sale.save();
+
+    const populated = await Sale.findById(sale._id)
+      .populate('customer', 'name phone email')
+      .populate('createdBy', 'name');
+
+    res.status(200).json({ success: true, message: 'Sale updated successfully', data: populated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Cancel sale (restore stock, set payment to refunded)
+// @route   PATCH /api/sales/:id/cancel
+// @access  Private (Admin, Manager)
+const cancelSale = async (req, res, next) => {
+  try {
+    const sale = await Sale.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!sale) {
+      return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
+    }
+    if (sale.paymentStatus === PAYMENT_STATUSES.REFUNDED) {
+      return res.status(400).json({ success: false, message: 'Sale is already refunded', errors: ['Already refunded'] });
+    }
+
+    // Restore product stock
+    for (const item of sale.items) {
+      await Product.findOneAndUpdate(
+        { _id: item.product, isDeleted: { $ne: true } },
+        { $inc: { stock: item.quantity } }
+      );
+    }
+
+    sale.paymentStatus = PAYMENT_STATUSES.REFUNDED;
+    sale.updatedBy = req.user._id;
+    await sale.save();
+
+    res.status(200).json({ success: true, message: 'Sale cancelled and stock restored', data: sale });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Complete sale (mark as paid if pending)
+// @route   PATCH /api/sales/:id/complete
+// @access  Private (Admin, Manager, Cashier)
+const completeSale = async (req, res, next) => {
+  try {
+    const sale = await Sale.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    if (!sale) {
+      return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
+    }
+    if (sale.paymentStatus === PAYMENT_STATUSES.REFUNDED) {
+      return res.status(400).json({ success: false, message: 'Cannot complete a refunded sale', errors: ['Sale is refunded'] });
+    }
+
+    sale.paymentStatus = PAYMENT_STATUSES.PAID;
+    sale.updatedBy = req.user._id;
+    await sale.save();
+
+    res.status(200).json({ success: true, message: 'Sale completed successfully', data: sale });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createSale, getSales, getSaleById, updateSale, cancelSale, completeSale, deleteSale };

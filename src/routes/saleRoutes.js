@@ -1,33 +1,28 @@
 const express = require('express');
-const { body } = require('express-validator');
 const router = express.Router();
-const { createSale, getSales, getSaleById, deleteSale } = require('../controllers/saleController');
+const { createSale, getSales, getSaleById, updateSale, cancelSale, completeSale, deleteSale } = require('../controllers/saleController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
+const { createSaleValidator, updateSaleValidator } = require('../validators/saleValidators');
 
 const staffRoles = authorize('admin', 'manager', 'cashier');
+const mgmtRoles = authorize('admin', 'manager');
 
 router
   .route('/')
   .get(protect, staffRoles, getSales)
-  .post(
-    protect,
-    staffRoles,
-    [
-      body('items').isArray({ min: 1 }).withMessage('Sale must have at least one item'),
-      body('items.*.product').notEmpty().withMessage('Each item must have a product ID'),
-      body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-      body('discountAmount').optional().isFloat({ min: 0 }).withMessage('Discount cannot be negative'),
-      body('taxAmount').optional().isFloat({ min: 0 }).withMessage('Tax cannot be negative'),
-      body('paymentMethod').optional().isIn(['cash', 'card', 'online', 'other']).withMessage('Invalid payment method'),
-    ],
-    validate,
-    createSale
-  );
+  .post(protect, staffRoles, createSaleValidator, validate, createSale);
 
 router
   .route('/:id')
   .get(protect, staffRoles, getSaleById)
+  .put(protect, mgmtRoles, updateSaleValidator, validate, updateSale)
   .delete(protect, authorize('admin'), deleteSale);
+
+// Cancel sale (restore stock) - Admin/Manager only
+router.patch('/:id/cancel', protect, mgmtRoles, cancelSale);
+
+// Complete sale (mark as paid) - All staff
+router.patch('/:id/complete', protect, staffRoles, completeSale);
 
 module.exports = router;

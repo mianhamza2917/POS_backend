@@ -1,4 +1,5 @@
 const Sale = require('../models/Sale');
+const { INVOICE } = require('./constants');
 
 const generateInvoiceNumber = async () => {
   const now = new Date();
@@ -14,9 +15,9 @@ const generateInvoiceNumber = async () => {
   const endOfDay = new Date(year, now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
   const count = await Sale.countDocuments({ createdAt: { $gte: startOfDay, $lte: endOfDay } });
-  const seq = String(count + 1).padStart(4, '0');
+  const seq = String(count + 1).padStart(INVOICE.SEQUENCE_PAD, '0');
 
-  return `INV-${dateStr}-${seq}`;
+  return `${INVOICE.PREFIX}${dateStr}-${seq}`;
 };
 
 module.exports = { generateInvoiceNumber };

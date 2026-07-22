@@ -1,7 +1,9 @@
 const Category = require('../models/Category');
+const Product = require('../models/Product');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
+const { SORT_FIELDS } = require('../utils/constants');
 
-const ALLOWED_SORT_FIELDS = ['name', 'createdAt', 'updatedAt'];
+const ALLOWED_SORT_FIELDS = SORT_FIELDS.CATEGORIES;
 
 // @desc    Get all categories
 // @route   GET /api/categories
@@ -97,7 +99,7 @@ const updateCategory = async (req, res, next) => {
   }
 };
 
-// @desc    Soft delete category
+// @desc    Soft delete category (checks for associated products)
 // @route   DELETE /api/categories/:id
 // @access  Private (Admin, Manager, Cashier)
 const deleteCategory = async (req, res, next) => {
@@ -106,6 +108,16 @@ const deleteCategory = async (req, res, next) => {
 
     if (!category) {
       return res.status(404).json({ success: false, message: 'Category not found', errors: ['Category not found'] });
+    }
+
+    // Check if any active products reference this category
+    const productsCount = await Product.countDocuments({ category: req.params.id, isDeleted: { $ne: true } });
+    if (productsCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete category: ${productsCount} product(s) are associated with it. Remove or reassign products first.`,
+        errors: [`${productsCount} product(s) are linked to this category`],
+      });
     }
 
     category.isDeleted = true;

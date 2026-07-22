@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const { USER_ROLES } = require('../utils/constants');
+const { parsePagination } = require('../utils/queryHelper');
 
 // @desc    Create a new user (Manager creates Cashier, Admin creates Manager/Cashier)
 // @route   POST /api/users
@@ -75,6 +77,8 @@ const createUser = async (req, res, next) => {
 const getUsers = async (req, res, next) => {
   try {
     const currentUserRole = req.user.role;
+    const { search } = req.query;
+    const { pageNum, limitNum, skip } = parsePagination(req.query);
     let query = { isDeleted: { $ne: true } };
 
     if (currentUserRole === 'manager') {
@@ -82,12 +86,25 @@ const getUsers = async (req, res, next) => {
       query.role = 'cashier';
     }
 
-    const users = await User.find(query).select('-password').sort({ createdAt: -1 });
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      User.find(query).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      User.countDocuments(query),
+    ]);
 
     res.status(200).json({
       success: true,
       message: 'Users retrieved successfully',
       count: users.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
       data: users,
     });
   } catch (error) {
@@ -291,3 +308,4 @@ module.exports = {
   disableUser,
   deleteUser,
 };
+

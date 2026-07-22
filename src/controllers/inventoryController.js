@@ -1,7 +1,8 @@
 const Product = require('../models/Product');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
+const { SORT_FIELDS, INVENTORY } = require('../utils/constants');
 
-const ALLOWED_SORT_FIELDS = ['stock', 'name', 'sku', 'price', 'createdAt', 'updatedAt'];
+const ALLOWED_SORT_FIELDS = SORT_FIELDS.INVENTORY;
 
 // @desc    Get inventory overview (summary stats + full list with filters)
 // @route   GET /api/inventory
@@ -61,11 +62,12 @@ const getInventory = async (req, res, next) => {
 // @access  Private
 const getLowStock = async (req, res, next) => {
   try {
-    const threshold = Math.max(1, parseInt(req.query.threshold, 10) || 10);
+    const threshold = Math.max(1, parseInt(req.query.threshold, 10) || INVENTORY.DEFAULT_THRESHOLD);
+    const sortOrder = parseInt(req.query.sortOrder, 10) === -1 ? -1 : 1;
     const products = await Product.find({
       isDeleted: { $ne: true },
       stock: { $gt: 0, $lte: threshold },
-    }).populate('category', 'name').sort({ stock: 1 });
+    }).populate('category', 'name').sort({ stock: sortOrder });
 
     res.status(200).json({ success: true, message: 'Low stock products retrieved', count: products.length, data: products });
   } catch (error) {

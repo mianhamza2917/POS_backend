@@ -1,7 +1,8 @@
 const Customer = require('../models/Customer');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
+const { SORT_FIELDS, CUSTOMER_STATUSES } = require('../utils/constants');
 
-const ALLOWED_SORT_FIELDS = ['name', 'phone', 'createdAt', 'updatedAt'];
+const ALLOWED_SORT_FIELDS = SORT_FIELDS.CUSTOMERS;
 
 // @desc    Get all customers
 // @route   GET /api/customers
@@ -45,7 +46,9 @@ const getCustomers = async (req, res, next) => {
 // @access  Private (Admin, Manager, Cashier)
 const getCustomerById = async (req, res, next) => {
   try {
-    const customer = await Customer.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const customer = await Customer.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+      .populate('createdBy', 'name')
+      .populate('updatedBy', 'name');
 
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Customer not found', errors: ['Customer not found'] });
@@ -123,8 +126,8 @@ const updateCustomer = async (req, res, next) => {
     if (req.body.phone !== undefined) customer.phone = req.body.phone;
     if (req.body.email !== undefined) customer.email = req.body.email;
     if (req.body.address !== undefined) customer.address = req.body.address;
-    if (req.body.status !== undefined) {
-      if (!['active', 'inactive'].includes(req.body.status)) {
+if (req.body.status !== undefined) {
+      if (!CUSTOMER_STATUSES.ALL.includes(req.body.status)) {
         return res.status(400).json({ success: false, message: 'Invalid status value', errors: ['Status must be active or inactive'] });
       }
       customer.status = req.body.status;

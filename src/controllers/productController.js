@@ -1,7 +1,8 @@
 const Product = require('../models/Product');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
+const { SORT_FIELDS, PRODUCT_STATUSES } = require('../utils/constants');
 
-const ALLOWED_SORT_FIELDS = ['name', 'price', 'stock', 'createdAt', 'updatedAt', 'sku'];
+const ALLOWED_SORT_FIELDS = SORT_FIELDS.PRODUCTS;
 
 // @desc    Get all products with filtering and search
 // @route   GET /api/products
@@ -152,9 +153,9 @@ const updateProduct = async (req, res, next) => {
     if (stock !== undefined) product.stock = stock;
     if (description !== undefined) product.description = description;
     if (image !== undefined) product.image = image;
-    if (status !== undefined) {
-      if (!['active', 'inactive', 'out_of_stock'].includes(status)) {
-        return res.status(400).json({ success: false, message: 'Invalid status value', errors: ['Status must be active, inactive, or out_of_stock'] });
+if (status !== undefined) {
+      if (!PRODUCT_STATUSES.ALL.includes(status)) {
+        return res.status(400).json({ success: false, message: `Invalid status value`, errors: [`Status must be ${PRODUCT_STATUSES.ALL.join(', ')}`] });
       }
       product.status = status;
     }

@@ -1,5 +1,4 @@
 const express = require('express');
-const { body } = require('express-validator');
 const router = express.Router();
 const {
   getCustomers,
@@ -10,26 +9,20 @@ const {
 } = require('../controllers/customerController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
+const { createCustomerValidator, updateCustomerValidator } = require('../validators/customerValidators');
+
+const staffRoles = authorize('admin', 'manager', 'cashier');
 
 // Customer Management Routes
 router
   .route('/')
-  .get(protect, authorize('admin', 'manager', 'cashier'), getCustomers)
-  .post(
-    protect,
-    authorize('admin', 'manager', 'cashier'),
-    [
-      body('name').trim().notEmpty().withMessage('Customer name is required'),
-      body('phone').trim().notEmpty().withMessage('Phone number is required'),
-    ],
-    validate,
-    createCustomer
-  );
+  .get(protect, staffRoles, getCustomers)
+  .post(protect, staffRoles, createCustomerValidator, validate, createCustomer);
 
 router
   .route('/:id')
-  .get(protect, authorize('admin', 'manager', 'cashier'), getCustomerById)
-  .put(protect, authorize('admin', 'manager', 'cashier'), updateCustomer)
+  .get(protect, staffRoles, getCustomerById)
+  .put(protect, staffRoles, updateCustomerValidator, validate, updateCustomer)
   .delete(protect, authorize('admin', 'manager'), deleteCustomer); // Cashiers CANNOT delete customers
 
 module.exports = router;

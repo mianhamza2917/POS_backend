@@ -1,5 +1,6 @@
 const Sale = require('../models/Sale');
 const { parsePagination } = require('../utils/queryHelper');
+const { PAYMENT_STATUSES } = require('../utils/constants');
 
 // Helper: build date range from period or explicit dates
 const buildDateRange = (period, startDate, endDate) => {
@@ -75,7 +76,7 @@ const getRevenueReport = async (req, res, next) => {
       : { year: { $year: '$createdAt' }, month: { $month: '$createdAt' }, day: { $dayOfMonth: '$createdAt' } };
 
     const data = await Sale.aggregate([
-      { $match: { isDeleted: { $ne: true }, paymentStatus: { $ne: 'refunded' }, createdAt: dateRange } },
+      { $match: { isDeleted: { $ne: true }, paymentStatus: { $ne: PAYMENT_STATUSES.REFUNDED }, createdAt: dateRange } },
       { $group: { _id: groupBy, revenue: { $sum: '$totalAmount' }, profit: { $sum: '$profit' }, orders: { $sum: 1 } } },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
     ]);
@@ -173,6 +174,7 @@ const getCustomerReport = async (req, res, next) => {
       { $limit: limitNum },
       { $lookup: { from: 'customers', localField: '_id', foreignField: '_id', as: 'customerInfo' } },
       { $unwind: { path: '$customerInfo', preserveNullAndEmptyArrays: true } },
+      { $match: { 'customerInfo.isDeleted': { $ne: true } } },
       { $project: { _id: 1, name: '$customerInfo.name', phone: '$customerInfo.phone', email: '$customerInfo.email', totalOrders: 1, totalSpent: 1, lastPurchase: 1 } },
     ]);
 
@@ -203,4 +205,3 @@ const getPaymentMethodReport = async (req, res, next) => {
 };
 
 module.exports = { getSalesReport, getRevenueReport, getCategoryReport, getTopProductsReport, getCustomerReport, getPaymentMethodReport };
-

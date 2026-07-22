@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { PRODUCT_STATUSES, FIELD_LENGTHS, DEFAULT_BRANCH_ID } = require('../utils/constants');
 
 const productSchema = new mongoose.Schema(
   {
@@ -6,7 +7,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide a product name'],
       trim: true,
-      maxlength: [100, 'Name cannot be more than 100 characters'],
+      maxlength: [FIELD_LENGTHS.PRODUCT_NAME_MAX, 'Name cannot be more than 100 characters'],
     },
     sku: {
       type: String,
@@ -45,8 +46,8 @@ const productSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'out_of_stock'],
-      default: 'active',
+      enum: PRODUCT_STATUSES.ALL,
+      default: PRODUCT_STATUSES.ACTIVE,
     },
     image: {
       type: String,
@@ -54,11 +55,11 @@ const productSchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      maxlength: [500, 'Description cannot be more than 500 characters'],
+      maxlength: [FIELD_LENGTHS.PRODUCT_DESC_MAX, 'Description cannot be more than 500 characters'],
     },
     branchId: {
       type: String,
-      default: 'main',
+      default: DEFAULT_BRANCH_ID,
       trim: true,
     },
     createdBy: {
@@ -85,9 +86,9 @@ const productSchema = new mongoose.Schema(
 // Update status based on stock
 productSchema.pre('save', function (next) {
   if (this.stock === 0) {
-    this.status = 'out_of_stock';
-  } else if (this.stock > 0 && this.status === 'out_of_stock') {
-    this.status = 'active';
+    this.status = PRODUCT_STATUSES.OUT_OF_STOCK;
+  } else if (this.stock > 0 && this.status === PRODUCT_STATUSES.OUT_OF_STOCK) {
+    this.status = PRODUCT_STATUSES.ACTIVE;
   }
   next();
 });

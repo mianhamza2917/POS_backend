@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { PAYMENT_METHODS, PAYMENT_STATUSES, FIELD_LENGTHS } = require('../utils/constants');
 
 const saleItemSchema = new mongoose.Schema(
   {
@@ -42,15 +43,15 @@ const saleSchema = new mongoose.Schema(
     profit: { type: Number, default: 0 },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'online', 'other'],
-      default: 'cash',
+      enum: PAYMENT_METHODS.ALL,
+      default: PAYMENT_METHODS.CASH,
     },
     paymentStatus: {
       type: String,
-      enum: ['paid', 'pending', 'refunded'],
-      default: 'paid',
+      enum: PAYMENT_STATUSES.ALL,
+      default: PAYMENT_STATUSES.PAID,
     },
-    notes: { type: String, maxlength: 500 },
+    notes: { type: String, maxlength: FIELD_LENGTHS.SALE_NOTES_MAX },
     branchId: { type: String, default: 'main', trim: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -61,7 +62,6 @@ const saleSchema = new mongoose.Schema(
 );
 
 // Index for fast date-range queries
-// NOTE: invoiceNumber index is already created by unique:true on the field — do NOT add it again here
 saleSchema.index({ createdAt: -1 });
 saleSchema.index({ customer: 1 });
 

@@ -2,6 +2,7 @@ const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const Customer = require('../models/Customer');
+const { PAYMENT_STATUSES, INVENTORY } = require('../utils/constants');
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard
@@ -13,7 +14,7 @@ const getDashboardStats = async (req, res, next) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    const baseQuery = { isDeleted: { $ne: true }, paymentStatus: { $ne: 'refunded' } };
+    const baseQuery = { isDeleted: { $ne: true }, paymentStatus: { $ne: PAYMENT_STATUSES.REFUNDED } };
 
     const [
       todaySalesAgg,
@@ -41,7 +42,7 @@ const getDashboardStats = async (req, res, next) => {
         { $group: { _id: null, revenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
       ]),
       Product.countDocuments({ isDeleted: { $ne: true } }),
-      Product.countDocuments({ isDeleted: { $ne: true }, stock: { $gt: 0, $lte: 10 } }),
+      Product.countDocuments({ isDeleted: { $ne: true }, stock: { $gt: 0, $lte: INVENTORY.LOW_STOCK_THRESHOLD } }),
       Product.countDocuments({ isDeleted: { $ne: true }, stock: 0 }),
       Category.countDocuments({ isDeleted: { $ne: true } }),
       Customer.countDocuments({ isDeleted: { $ne: true } }),
@@ -96,7 +97,7 @@ const getSalesChart = async (req, res, next) => {
     let groupFormat, matchFrom;
 
     if (period === 'monthly') {
-      matchFrom = new Date(now.getFullYear() - 1, now.getMonth() + 1, 1);
+      matchFrom = new Date(now.getFullYear() - 1, now.getMonth(), 1);
       groupFormat = { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } };
     } else {
       matchFrom = new Date(now);
@@ -106,7 +107,7 @@ const getSalesChart = async (req, res, next) => {
     }
 
     const data = await Sale.aggregate([
-      { $match: { isDeleted: { $ne: true }, paymentStatus: { $ne: 'refunded' }, createdAt: { $gte: matchFrom } } },
+      { $match: { isDeleted: { $ne: true }, paymentStatus: { $ne: PAYMENT_STATUSES.REFUNDED }, createdAt: { $gte: matchFrom } } },
       { $group: { _id: groupFormat, revenue: { $sum: '$totalAmount' }, profit: { $sum: '$profit' }, orders: { $sum: 1 } } },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1 } },
     ]);
@@ -118,4 +119,3 @@ const getSalesChart = async (req, res, next) => {
 };
 
 module.exports = { getDashboardStats, getSalesChart };
-

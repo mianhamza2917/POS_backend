@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { FIELD_LENGTHS, CUSTOMER_STATUSES, EMAIL_REGEX, DEFAULT_BRANCH_ID } = require('../utils/constants');
 
 const customerSchema = new mongoose.Schema(
   {
@@ -6,7 +7,7 @@ const customerSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide customer name'],
       trim: true,
-      maxlength: [100, 'Customer name cannot be more than 100 characters'],
+      maxlength: [FIELD_LENGTHS.CUSTOMER_NAME_MAX, 'Customer name cannot be more than 100 characters'],
     },
     email: {
       type: String,
@@ -15,7 +16,7 @@ const customerSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        EMAIL_REGEX,
         'Please provide a valid email address',
       ],
     },
@@ -32,12 +33,12 @@ const customerSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'inactive'],
-      default: 'active',
+      enum: CUSTOMER_STATUSES.ALL,
+      default: CUSTOMER_STATUSES.ACTIVE,
     },
     branchId: {
       type: String,
-      default: 'main',
+      default: DEFAULT_BRANCH_ID,
       trim: true,
     },
     createdBy: {

@@ -1,9 +1,9 @@
 const express = require('express');
-const { body } = require('express-validator');
 const router = express.Router();
 const { getInventory, getLowStock, getOutOfStock, adjustStock } = require('../controllers/inventoryController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
+const { adjustStockValidator } = require('../validators/inventoryValidators');
 
 const staffRoles = authorize('admin', 'manager', 'cashier');
 
@@ -15,10 +15,7 @@ router.patch(
   '/:id/adjust',
   protect,
   authorize('admin', 'manager'),
-  [
-    body('adjustment').notEmpty().isInt().withMessage('Adjustment must be an integer'),
-    body('reason').optional().isString(),
-  ],
+  adjustStockValidator,
   validate,
   adjustStock
 );
