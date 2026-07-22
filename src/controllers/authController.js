@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -156,78 +155,58 @@ const getUserProfile = async (req, res) => {
 // @desc    Forgot password
 // @route   POST /api/auth/forgotpassword
 // @access  Public
+// @desc    Forgot password
+// @route   POST /api/auth/forgotpassword
+// @access  Public
 const forgotPassword = async (req, res) => {
-  const { email } = req.body;
-
   try {
-    // Find user by email
+    const { email } = req.body;
+
+    // Find user
     const user = await User.findOne({ email });
 
     if (!user || user.isDeleted) {
-      const message = 'No user found with this email';
       return res.status(404).json({
         success: false,
-        message,
-        errors: [message],
+        message: "No user found with this email",
+        errors: ["No user found with this email"],
       });
     }
 
     // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetToken = crypto.randomBytes(32).toString("hex");
 
-    // Hash token and set to resetPasswordToken field
+    // Save hashed token in DB
     user.resetPasswordToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(resetToken)
-      .digest('hex');
+      .digest("hex");
 
-    // Set token expiration (30 minutes)
+    // Token expires in 30 minutes
     user.resetPasswordExpire = Date.now() + 30 * 60 * 1000;
 
     await user.save({ validateBeforeSave: false });
 
     // Create reset URL
-    const resetUrl = `${req.protocol}://${req.get('host')}/api/auth/resetpassword/${resetToken}`;
+    const resetUrl = `${req.protocol}://${req.get(
+      "host"
+    )}/api/auth/resetpassword/${resetToken}`;
 
-    // Create email transporter
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
+    // DEVELOPMENT MODE
+    // Instead of sending email, return the token in the response.
+    return res.status(200).json({
+      success: true,
+      message: "Password reset token generated successfully",
+      data: {
+        resetToken,
+        resetUrl,
+        expiresIn: "30 minutes",
       },
     });
-
-    // Email message
-    const message = {
-      from: `${process.env.EMAIL_FROM}`,
-      to: user.email,
-      subject: 'Password Reset Request',
-      text: `You are receiving this email because you (or someone else) has requested a password reset for your account.\n\nPlease click on the following link to reset your password:\n\n${resetUrl}\n\nIf you did not request this, please ignore this email and your password will remain unchanged.\n`,
-    };
-
-    // Send email
-    await transporter.sendMail(message);
-
-    res.status(200).json({
-      success: true,
-      message: 'Password reset email sent',
-      data: {},
-    });
   } catch (error) {
-    // Clear reset token fields if error occurs
-    const user = await User.findOne({ email });
-    if (user) {
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpire = undefined;
-      await user.save({ validateBeforeSave: false });
-    }
-
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: 'Email could not be sent',
+      message: "Server error while generating reset token",
       errors: [error.message],
     });
   }

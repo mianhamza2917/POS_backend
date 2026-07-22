@@ -40,11 +40,11 @@ const saleSchema = new mongoose.Schema(
     taxAmount: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number, required: true, min: 0 },
     profit: { type: Number, default: 0 },
-    paymentMethod: {
-      type: String,
-      enum: ['cash', 'card', 'online', 'other'],
-      default: 'cash',
-    },
+   paymentMethod: {
+    type: String,
+    enum: ['Cash', 'Card', 'Bank Transfer'],
+    required: true
+  },
     paymentStatus: {
       type: String,
       enum: ['paid', 'pending', 'refunded'],
