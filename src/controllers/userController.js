@@ -300,6 +300,92 @@ const deleteUser = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle user enable/disable status
+// @route   PATCH /api/users/:id/status
+// @access  Private (Admin only)
+const toggleStatus = async (req, res, next) => {
+  try {
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+
+    if (!targetUser) {
+      const message = 'User not found';
+      return res.status(404).json({
+        success: false,
+        message,
+        errors: [message],
+      });
+    }
+
+    if (req.body.isDisabled === undefined) {
+      const message = 'isDisabled field is required';
+      return res.status(400).json({
+        success: false,
+        message,
+        errors: [message],
+      });
+    }
+
+    targetUser.isDisabled = req.body.isDisabled;
+    targetUser.updatedBy = req.user._id;
+
+    await targetUser.save();
+
+    res.status(200).json({
+      success: true,
+      message: `User account ${targetUser.isDisabled ? 'disabled' : 'enabled'} successfully`,
+      data: {
+        _id: targetUser._id,
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        isDisabled: targetUser.isDisabled,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Admin forces reset password for a user
+// @route   PATCH /api/users/:id/reset-password
+// @access  Private (Admin only)
+const resetPasswordForUser = async (req, res, next) => {
+  try {
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).select('+password');
+
+    if (!targetUser) {
+      const message = 'User not found';
+      return res.status(404).json({
+        success: false,
+        message,
+        errors: [message],
+      });
+    }
+
+    if (!req.body.password) {
+      const message = 'New password is required';
+      return res.status(400).json({
+        success: false,
+        message,
+        errors: [message],
+      });
+    }
+
+    targetUser.password = req.body.password;
+    targetUser.updatedBy = req.user._id;
+
+    await targetUser.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully',
+      data: {},
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createUser,
   getUsers,
@@ -307,5 +393,7 @@ module.exports = {
   updateUser,
   disableUser,
   deleteUser,
+  toggleStatus,
+  resetPasswordForUser,
 };
 

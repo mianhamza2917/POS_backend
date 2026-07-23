@@ -25,6 +25,20 @@ const userSchema = new mongoose.Schema({
     minlength: [FIELD_LENGTHS.PASSWORD_MIN, 'Password must be at least 6 characters'],
     select: false,
   },
+  phone: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  address: {
+    type: String,
+    trim: true,
+    default: '',
+  },
+  photo: {
+    type: String,
+    default: '',
+  },
   role: {
     type: String,
     enum: USER_ROLES.ALL,

@@ -120,6 +120,48 @@ Object.freeze(BCRYPT);
 // ---------- Default Branch ----------
 const DEFAULT_BRANCH_ID = 'main';
 
+// ---------- Upload ----------
+const UPLOAD = {
+  ALLOWED_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+  MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
+  PROFILE_PATH: 'uploads/profiles',
+  LOGO_PATH: 'uploads/logos',
+};
+Object.freeze(UPLOAD);
+
+// ---------- Settings Defaults ----------
+const SETTINGS_DEFAULTS = {
+  BUSINESS: {
+    businessName: '',
+    businessEmail: '',
+    phone: '',
+    currency: 'USD',
+    businessAddress: '',
+    logo: '',
+  },
+  TAX: {
+    taxName: 'VAT',
+    taxRate: 0,
+    taxRegistrationNumber: '',
+    enableTax: false,
+  },
+  INVOICE: {
+    invoicePrefix: 'INV-',
+    startingInvoiceNumber: 1,
+    invoiceFooter: 'Thank you for your business!',
+    showBusinessLogo: false,
+    showTaxInformation: false,
+  },
+  PAYMENT_METHODS: {
+    cash: true,
+    card: true,
+    onlinePayment: false,
+    bankTransfer: false,
+    cashOnDelivery: false,
+  },
+};
+Object.freeze(SETTINGS_DEFAULTS);
+
 // ---------- Error Messages ----------
 const ERROR_MSGS = {
   NOT_FOUND: 'Resource not found',
@@ -190,6 +232,8 @@ module.exports = {
   INVOICE,
   BCRYPT,
   DEFAULT_BRANCH_ID,
+  UPLOAD,
+  SETTINGS_DEFAULTS,
   ERROR_MSGS,
   HTTP_STATUS,
   EMAIL_REGEX,
