@@ -54,7 +54,25 @@ const updateUserValidator = [
     .withMessage('Branch ID cannot be empty'),
 ];
 
+const toggleStatusValidator = [
+  body('isDisabled')
+    .notEmpty()
+    .withMessage('isDisabled field is required')
+    .isBoolean()
+    .withMessage('isDisabled must be a boolean value'),
+];
+
+const resetPasswordValidator = [
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
+];
+
 module.exports = {
   createUserValidator,
   updateUserValidator,
+  toggleStatusValidator,
+  resetPasswordValidator,
 };

@@ -1,4 +1,11 @@
-require('dotenv').config();
+/**
+ * Local Development Server Startup
+ *
+ * VERCEL-SPECIFIC: This file is used ONLY for local development.
+ * For Vercel deployments, the entry point is `api/index.js`.
+ * The `require('dotenv').config()` has been moved to `src/app.js`
+ * so that environment variables are loaded both locally and on Vercel.
+ */
 const connectDB = require('./config/db');
 const app = require('./app');
 

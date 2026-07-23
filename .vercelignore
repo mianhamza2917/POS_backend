@@ -1,0 +1,17 @@
+# VERCEL-SPECIFIC: Ignore local development files that shouldn't be deployed
+node_modules
+.env
+.env.*
+.git
+.gitignore
+README.md
+TODO.md
+
+# Ignore test files and test directories
+tests
+seeds
+docs
+
+# Ignore local uploads directory (Vercel has ephemeral filesystem)
+uploads
+

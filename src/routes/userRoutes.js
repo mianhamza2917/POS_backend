@@ -7,10 +7,12 @@ const {
   updateUser,
   disableUser,
   deleteUser,
+  toggleStatus,
+  resetPasswordForUser,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const validate = require('../middleware/validateMiddleware');
-const { createUserValidator, updateUserValidator } = require('../validators/userValidators');
+const { createUserValidator, updateUserValidator, toggleStatusValidator, resetPasswordValidator } = require('../validators/userValidators');
 
 router
   .route('/')
@@ -26,5 +28,13 @@ router
 router
   .route('/:id/disable')
   .patch(protect, authorize('admin'), disableUser);
+
+router
+  .route('/:id/status')
+  .patch(protect, authorize('admin'), toggleStatusValidator, validate, toggleStatus);
+
+router
+  .route('/:id/reset-password')
+  .patch(protect, authorize('admin'), resetPasswordValidator, validate, resetPasswordForUser);
 
 module.exports = router;
