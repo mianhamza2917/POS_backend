@@ -98,3 +98,10 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 module.exports = app;
+
+app.get("/api/test", (req, res) => {
+  res.json({
+    success: true,
+    message: "Vercel Test Route Working"
+  });
+});
