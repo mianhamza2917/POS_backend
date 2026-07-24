@@ -1,5 +1,6 @@
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
+const Inventory = require('../models/Inventory');
 const Category = require('../models/Category');
 const Customer = require('../models/Customer');
 const { PAYMENT_STATUSES, INVENTORY } = require('../utils/constants');
@@ -42,8 +43,8 @@ const getDashboardStats = async (req, res, next) => {
         { $group: { _id: null, revenue: { $sum: '$totalAmount' }, count: { $sum: 1 } } },
       ]),
       Product.countDocuments({ isDeleted: { $ne: true } }),
-      Product.countDocuments({ isDeleted: { $ne: true }, stock: { $gt: 0, $lte: INVENTORY.LOW_STOCK_THRESHOLD } }),
-      Product.countDocuments({ isDeleted: { $ne: true }, stock: 0 }),
+      Inventory.countDocuments({ isDeleted: { $ne: true }, quantity: { $gt: 0, $lte: INVENTORY.LOW_STOCK_THRESHOLD } }),
+      Inventory.countDocuments({ isDeleted: { $ne: true }, quantity: 0 }),
       Category.countDocuments({ isDeleted: { $ne: true } }),
       Customer.countDocuments({ isDeleted: { $ne: true } }),
       Sale.countDocuments({ isDeleted: { $ne: true } }),

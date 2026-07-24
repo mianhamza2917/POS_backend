@@ -93,4 +93,39 @@ productSchema.pre('save', function (next) {
   next();
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Auto-sync: After saving Product, create/update Inventory record
+// ═══════════════════════════════════════════════════════════════
+productSchema.post('save', async function (doc, next) {
+  try {
+    const Inventory = mongoose.model('Inventory');
+    const inventoryRecord = await Inventory.findOne({ product: doc._id });
+
+    if (inventoryRecord) {
+      // Only update if the stock actually differs (avoid infinite loop)
+      if (inventoryRecord.quantity !== doc.stock) {
+        inventoryRecord.quantity = doc.stock;
+        inventoryRecord.updatedBy = doc.updatedBy;
+        // Use direct update to bypass post-save hook on Inventory
+        await Inventory.updateOne(
+          { _id: inventoryRecord._id },
+          { $set: { quantity: doc.stock, updatedBy: doc.updatedBy } }
+        );
+      }
+    } else {
+      // Create inventory record for this product
+      await Inventory.create({
+        product: doc._id,
+        quantity: doc.stock,
+        branchId: doc.branchId || 'main',
+        createdBy: doc.createdBy,
+        updatedBy: doc.updatedBy,
+      });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = mongoose.model('Product', productSchema);
