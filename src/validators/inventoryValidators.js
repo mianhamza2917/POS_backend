@@ -1,4 +1,4 @@
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 
 const adjustStockValidator = [
   body('adjustment')
@@ -20,6 +20,28 @@ const adjustStockValidator = [
     .withMessage('Reason cannot be more than 200 characters'),
 ];
 
+const createInventoryValidator = [
+  body('product')
+    .notEmpty()
+    .withMessage('Product ID is required')
+    .isMongoId()
+    .withMessage('Invalid product ID'),
+  body('quantity')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Quantity must be a non-negative integer'),
+  body('lowStockThreshold')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Low stock threshold must be at least 1'),
+  body('location')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Location cannot be more than 100 characters'),
+];
+
 const inventoryQueryValidator = [
   body('threshold')
     .optional()
@@ -29,5 +51,6 @@ const inventoryQueryValidator = [
 
 module.exports = {
   adjustStockValidator,
+  createInventoryValidator,
   inventoryQueryValidator,
 };

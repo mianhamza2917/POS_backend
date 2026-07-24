@@ -5,8 +5,9 @@
  *   1. Users (no dependencies)
  *   2. Categories (no dependencies)
  *   3. Products (depends on Categories)
- *   4. Customers (no dependencies)
- *   5. Sales (depends on Users, Products, Customers)
+ *   4. Inventory (depends on Products)
+ *   5. Customers (no dependencies)
+ *   6. Sales (depends on Users, Products, Customers)
  *
  * Usage:  node seeds/index.js
  *         npm run seed
@@ -21,6 +22,7 @@ const mongoose = require('mongoose');
 const seedUsers = require('./user.seed');
 const seedCategories = require('./category.seed');
 const seedProducts = require('./product.seed');
+const seedInventory = require('./inventory.seed');
 const seedCustomers = require('./customer.seed');
 const seedSales = require('./sale.seed');
 
@@ -33,27 +35,32 @@ async function runAll() {
 
   try {
     // Step 1: Users
-    console.log('--- Step 1/5: Users ---');
+    console.log('--- Step 1/6: Users ---');
     const userResult = await seedUsers();
     RESULTS.push({ step: 'Users', ...userResult });
 
     // Step 2: Categories
-    console.log('\n--- Step 2/5: Categories ---');
+    console.log('\n--- Step 2/6: Categories ---');
     const catResult = await seedCategories();
     RESULTS.push({ step: 'Categories', ...catResult });
 
     // Step 3: Products (depends on categories)
-    console.log('\n--- Step 3/5: Products ---');
+    console.log('\n--- Step 3/6: Products ---');
     const prodResult = await seedProducts();
     RESULTS.push({ step: 'Products', ...prodResult });
 
-    // Step 4: Customers
-    console.log('\n--- Step 4/5: Customers ---');
+    // Step 4: Inventory (depends on products)
+    console.log('\n--- Step 4/6: Inventory ---');
+    const invResult = await seedInventory();
+    RESULTS.push({ step: 'Inventory', ...invResult });
+
+    // Step 5: Customers
+    console.log('\n--- Step 5/6: Customers ---');
     const custResult = await seedCustomers();
     RESULTS.push({ step: 'Customers', ...custResult });
 
-    // Step 5: Sales (depends on users, products, customers)
-    console.log('\n--- Step 5/5: Sales ---');
+    // Step 6: Sales (depends on users, products, customers)
+    console.log('\n--- Step 6/6: Sales ---');
     const saleResult = await seedSales();
     RESULTS.push({ step: 'Sales', ...saleResult });
 
@@ -77,3 +84,4 @@ async function runAll() {
 }
 
 runAll();
+

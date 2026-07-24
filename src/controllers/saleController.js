@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
+const Inventory = require('../models/Inventory');
 const { generateInvoiceNumber } = require('../utils/invoiceHelper');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
 const { SORT_FIELDS, PAYMENT_METHODS, PAYMENT_STATUSES } = require('../utils/constants');
@@ -17,15 +18,24 @@ const createSale = async (req, res, next) => {
     let subtotal = 0;
     let profit = 0;
     const enrichedItems = [];
-    const productsToUpdate = [];
+    const inventoryUpdates = [];
 
     for (const item of items) {
+      // Check product exists
       const product = await Product.findOne({ _id: item.product, isDeleted: { $ne: true } });
       if (!product) {
         return res.status(404).json({ success: false, message: `Product not found: ${item.product}`, errors: [`Product not found: ${item.product}`] });
       }
-      if (product.stock < item.quantity) {
-        return res.status(400).json({ success: false, message: `Insufficient stock for: ${product.name}`, errors: [`Insufficient stock for: ${product.name}`] });
+
+      // Check inventory record exists for this product
+      const inventory = await Inventory.findOne({ product: item.product, isDeleted: { $ne: true } });
+      if (!inventory) {
+        return res.status(400).json({ success: false, message: `No inventory record for product: ${product.name}`, errors: [`No inventory record for ${product.name}`] });
+      }
+
+      // Check sufficient stock using Inventory.quantity
+      if (inventory.quantity < item.quantity) {
+        return res.status(400).json({ success: false, message: `Insufficient stock for: ${product.name} (available: ${inventory.quantity}, requested: ${item.quantity})`, errors: [`Insufficient stock for: ${product.name}`] });
       }
 
       const unitPrice = item.unitPrice !== undefined ? item.unitPrice : product.price;
@@ -44,9 +54,10 @@ const createSale = async (req, res, next) => {
         total,
       });
 
-      product.stock -= item.quantity;
-      product.updatedBy = req.user._id;
-      productsToUpdate.push(product.save());
+      // Deduct from inventory quantity
+      inventory.quantity -= item.quantity;
+      inventory.updatedBy = req.user._id;
+      inventoryUpdates.push(inventory.save());
     }
 
     if (discountAmount > subtotal) {
@@ -59,24 +70,25 @@ const createSale = async (req, res, next) => {
     }
     const invoiceNumber = await generateInvoiceNumber();
 
-    const sale = await Sale.create({
-      invoiceNumber,
-      customer: customer || null,
-      items: enrichedItems,
-      subtotal,
-      discountAmount,
-      taxAmount,
-      totalAmount,
-      profit,
-      paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
-      notes,
-      branchId: req.user.branchId || 'main',
-      createdBy: req.user._id,
-      updatedBy: req.user._id,
-    });
-
-    // Update product stock after sale is created
-    await Promise.all(productsToUpdate);
+    // Create sale and update inventory in parallel
+    const [sale] = await Promise.all([
+      Sale.create({
+        invoiceNumber,
+        customer: customer || null,
+        items: enrichedItems,
+        subtotal,
+        discountAmount,
+        taxAmount,
+        totalAmount,
+        profit,
+        paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
+        notes,
+        branchId: req.user.branchId || 'main',
+        createdBy: req.user._id,
+        updatedBy: req.user._id,
+      }),
+      Promise.all(inventoryUpdates),
+    ]);
 
     const populated = await Sale.findById(sale._id)
       .populate('customer', 'name phone email')
@@ -151,7 +163,7 @@ const getSaleById = async (req, res, next) => {
   }
 };
 
-// @desc    Soft delete sale (restores product stock)
+// @desc    Soft delete sale (restores inventory stock)
 // @route   DELETE /api/sales/:id
 // @access  Private (Admin only)
 const deleteSale = async (req, res, next) => {
@@ -161,11 +173,11 @@ const deleteSale = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
     }
 
-    // Restore product stock before soft-deleting
+    // Restore inventory stock before soft-deleting
     for (const item of sale.items) {
-      await Product.findOneAndUpdate(
-        { _id: item.product, isDeleted: { $ne: true } },
-        { $inc: { stock: item.quantity } }
+      await Inventory.findOneAndUpdate(
+        { product: item.product, isDeleted: { $ne: true } },
+        { $inc: { quantity: item.quantity } }
       );
     }
 
@@ -218,11 +230,11 @@ const updateSale = async (req, res, next) => {
         return res.status(400).json({ success: false, message: 'Sale must have at least one item', errors: ['Invalid items'] });
       }
 
-      // Restore original stock for previous items
+      // Restore original stock for previous items (via Inventory)
       for (const oldItem of sale.items) {
-        await Product.findOneAndUpdate(
-          { _id: oldItem.product, isDeleted: { $ne: true } },
-          { $inc: { stock: oldItem.quantity } }
+        await Inventory.findOneAndUpdate(
+          { product: oldItem.product, isDeleted: { $ne: true } },
+          { $inc: { quantity: oldItem.quantity } }
         );
       }
 
@@ -235,8 +247,15 @@ const updateSale = async (req, res, next) => {
         if (!product) {
           return res.status(404).json({ success: false, message: `Product not found: ${item.product}`, errors: [`Product not found: ${item.product}`] });
         }
-        if (product.stock < item.quantity) {
-          return res.status(400).json({ success: false, message: `Insufficient stock for: ${product.name}`, errors: [`Insufficient stock for: ${product.name}`] });
+
+        // Check inventory for new items
+        const inventory = await Inventory.findOne({ product: item.product, isDeleted: { $ne: true } });
+        if (!inventory) {
+          return res.status(400).json({ success: false, message: `No inventory record for product: ${product.name}`, errors: [`No inventory record for ${product.name}`] });
+        }
+
+        if (inventory.quantity < item.quantity) {
+          return res.status(400).json({ success: false, message: `Insufficient stock for: ${product.name} (available: ${inventory.quantity}, requested: ${item.quantity})`, errors: [`Insufficient stock for: ${product.name}`] });
         }
 
         const unitPrice = item.unitPrice !== undefined ? item.unitPrice : product.price;
@@ -255,8 +274,9 @@ const updateSale = async (req, res, next) => {
           total,
         });
 
-        product.stock -= item.quantity;
-        await product.save();
+        // Deduct from inventory
+        inventory.quantity -= item.quantity;
+        await inventory.save();
       }
 
       sale.items = enrichedItems;
@@ -305,11 +325,11 @@ const cancelSale = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Sale is already refunded', errors: ['Already refunded'] });
     }
 
-    // Restore product stock
+    // Restore inventory stock
     for (const item of sale.items) {
-      await Product.findOneAndUpdate(
-        { _id: item.product, isDeleted: { $ne: true } },
-        { $inc: { stock: item.quantity } }
+      await Inventory.findOneAndUpdate(
+        { product: item.product, isDeleted: { $ne: true } },
+        { $inc: { quantity: item.quantity } }
       );
     }
 
@@ -347,3 +367,4 @@ const completeSale = async (req, res, next) => {
 };
 
 module.exports = { createSale, getSales, getSaleById, updateSale, cancelSale, completeSale, deleteSale };
+

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node seeds/index.js",
+    "seed":"node seeds/index.js",
+    "db:cleanup":"node scripts/cleanupDatabase.js",
     "vercel-build": "echo 'Build complete'",
     "vercel": "vercel"
   },
