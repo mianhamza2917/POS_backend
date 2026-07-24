@@ -62,6 +62,24 @@ const getDashboardStats = async (req, res, next) => {
       ]),
     ]);
 
+    // Populate category for top selling products
+    if (topProducts.length > 0) {
+      const productIds = topProducts.map(p => p._id);
+      const productsWithCategory = await Product.find({ _id: { $in: productIds } })
+        .populate('category', 'name')
+        .select('_id category')
+        .lean();
+
+      const categoryMap = {};
+      for (const product of productsWithCategory) {
+        categoryMap[product._id.toString()] = product.category ? product.category.name : 'No Category';
+      }
+
+      topProducts.forEach(product => {
+        product.category = categoryMap[product._id.toString()] || 'No Category';
+      });
+    }
+
     const todayData = todaySalesAgg[0] || { revenue: 0, profit: 0, count: 0 };
     const monthData = monthlySalesAgg[0] || { revenue: 0, profit: 0, count: 0 };
     const lastMonthData = lastMonthAgg[0] || { revenue: 0, count: 0 };
