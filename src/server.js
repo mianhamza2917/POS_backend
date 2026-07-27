@@ -1,3 +1,8 @@
+require('dotenv').config();
+
+console.log("Mongo URI:", process.env.MONGO_URI);
+
+
 /**
  * Local Development Server Startup
  *
@@ -6,6 +11,7 @@
  * The `require('dotenv').config()` has been moved to `src/app.js`
  * so that environment variables are loaded both locally and on Vercel.
  */
+
 const connectDB = require('./config/db');
 const app = require('./app');
 
