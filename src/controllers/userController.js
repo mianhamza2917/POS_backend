@@ -30,8 +30,8 @@ const createUser = async (req, res, next) => {
       });
     }
 
-    // Check if user already exists
-    const userExists = await User.findOne({ email });
+    // Check if user already exists (exclude soft-deleted users)
+    const userExists = await User.findOne({ email, isDeleted: { $ne: true } });
     if (userExists) {
       const message = 'User already exists with this email';
       return res.status(400).json({
@@ -155,7 +155,7 @@ const getUserById = async (req, res, next) => {
 const updateUser = async (req, res, next) => {
   try {
     const currentUserRole = req.user.role;
-    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).select('+password');
 
     if (!targetUser) {
       const message = 'User not found';
@@ -189,7 +189,23 @@ const updateUser = async (req, res, next) => {
     // Update allowed fields
     const { name, email, role, branchId } = req.body;
     if (name) targetUser.name = name;
-    if (email) targetUser.email = email;
+    if (email) {
+      // Check email uniqueness (exclude soft-deleted users and current user)
+      const emailExists = await User.findOne({
+        email,
+        _id: { $ne: targetUser._id },
+        isDeleted: { $ne: true },
+      });
+      if (emailExists) {
+        const message = 'User already exists with this email';
+        return res.status(400).json({
+          success: false,
+          message,
+          errors: [message],
+        });
+      }
+      targetUser.email = email;
+    }
     if (role) targetUser.role = role;
     if (branchId) targetUser.branchId = branchId;
     if (req.body.password) targetUser.password = req.body.password;
@@ -221,7 +237,7 @@ const updateUser = async (req, res, next) => {
 // @access  Private (Admin only)
 const disableUser = async (req, res, next) => {
   try {
-    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).select('+password');
 
     if (!targetUser) {
       const message = 'User not found';
@@ -263,7 +279,7 @@ const disableUser = async (req, res, next) => {
 const deleteUser = async (req, res, next) => {
   try {
     const currentUserRole = req.user.role;
-    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).select('+password');
 
     if (!targetUser) {
       const message = 'User not found';
@@ -305,7 +321,7 @@ const deleteUser = async (req, res, next) => {
 // @access  Private (Admin only)
 const toggleStatus = async (req, res, next) => {
   try {
-    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const targetUser = await User.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).select('+password');
 
     if (!targetUser) {
       const message = 'User not found';
