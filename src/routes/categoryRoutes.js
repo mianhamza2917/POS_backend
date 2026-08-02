@@ -14,16 +14,16 @@ const { createCategoryValidator, updateCategoryValidator } = require('../validat
 const staffRoles = authorize('admin', 'manager', 'cashier');
 const mgmtRoles = authorize('admin', 'manager');
 
-// Category routes accessible by Admin, Manager, and Cashier
+// Category routes accessible by Admin, Manager, and Cashier (read-only for Cashier)
 router
   .route('/')
   .get(protect, staffRoles, getCategories)
-  .post(protect, staffRoles, createCategoryValidator, validate, createCategory);
+  .post(protect, mgmtRoles, createCategoryValidator, validate, createCategory); // Cashiers CANNOT create categories
 
 router
   .route('/:id')
   .get(protect, staffRoles, getCategoryById)
-  .put(protect, staffRoles, updateCategoryValidator, validate, updateCategory)
+  .put(protect, mgmtRoles, updateCategoryValidator, validate, updateCategory) // Cashiers CANNOT update categories
   .delete(protect, mgmtRoles, deleteCategory); // Cashiers CANNOT delete categories
 
 module.exports = router;
