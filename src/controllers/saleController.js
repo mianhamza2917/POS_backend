@@ -54,41 +54,46 @@ const createSale = async (req, res, next) => {
         total,
       });
 
-      // Deduct from inventory quantity
-      inventory.quantity -= item.quantity;
-      inventory.updatedBy = req.user._id;
-      inventoryUpdates.push(inventory.save());
+      // Defer inventory save: mark for deduction after all validations pass
+      inventoryUpdates.push({
+        inventory,
+        newQuantity: inventory.quantity - item.quantity,
+      });
     }
 
     if (discountAmount > subtotal) {
       return res.status(400).json({ success: false, message: 'Discount amount cannot exceed subtotal', errors: ['Discount exceeds subtotal'] });
     }
 
-    const totalAmount = subtotal - discountAmount + taxAmount;
+const totalAmount = subtotal - discountAmount + taxAmount;
     if (totalAmount < 0) {
       return res.status(400).json({ success: false, message: 'Total amount cannot be negative', errors: ['Invalid total amount'] });
     }
     const invoiceNumber = await generateInvoiceNumber();
 
-    // Create sale and update inventory in parallel
-    const [sale] = await Promise.all([
-      Sale.create({
-        invoiceNumber,
-        customer: customer || null,
-        items: enrichedItems,
-        subtotal,
-        discountAmount,
-        taxAmount,
-        totalAmount,
-        profit,
-        paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
-        notes,
-        branchId: req.user.branchId || 'main',
-        createdBy: req.user._id,
-        updatedBy: req.user._id,
-      }),
-      Promise.all(inventoryUpdates),
-    ]);
+    // Create sale
+    const sale = await Sale.create({
+      invoiceNumber,
+      customer: customer || null,
+      items: enrichedItems,
+      subtotal,
+      discountAmount,
+      taxAmount,
+      totalAmount,
+      profit,
+      paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
+      notes,
+      branchId: req.user.branchId || 'main',
+      createdBy: req.user._id,
+      updatedBy: req.user._id,
+    });
+
+    // Apply deferred inventory deductions after sale is created
+    for (const upd of inventoryUpdates) {
+      upd.inventory.quantity = upd.newQuantity;
+      upd.inventory.updatedBy = req.user._id;
+      await upd.inventory.save();
+    }
 
     const populated = await Sale.findById(sale._id)
       .populate('customer', 'name phone email')
@@ -110,6 +115,10 @@ const getSales = async (req, res, next) => {
     const sort = parseSort(sortBy, sortOrder, ALLOWED_SORT_FIELDS);
 
     const query = { isDeleted: { $ne: true } };
+    // Cashiers can only view their own sales history
+    if (req.user.role === 'cashier') {
+      query.createdBy = req.user._id;
+    }
     if (search) query.$or = [{ invoiceNumber: { $regex: search, $options: 'i' } }];
     if (customer) query.customer = customer;
     if (paymentMethod) query.paymentMethod = paymentMethod;
@@ -148,7 +157,13 @@ const getSales = async (req, res, next) => {
 // @access  Private
 const getSaleById = async (req, res, next) => {
   try {
-    const sale = await Sale.findOne({ _id: req.params.id, isDeleted: { $ne: true } })
+    const query = { _id: req.params.id, isDeleted: { $ne: true } };
+    // Cashiers can only view their own transaction details (receipt)
+    if (req.user.role === 'cashier') {
+      query.createdBy = req.user._id;
+    }
+
+    const sale = await Sale.findOne(query)
       .populate('customer', 'name phone email address')
       .populate('items.product', 'name sku barcode')
       .populate('createdBy', 'name email');
@@ -348,7 +363,13 @@ const cancelSale = async (req, res, next) => {
 // @access  Private (Admin, Manager, Cashier)
 const completeSale = async (req, res, next) => {
   try {
-    const sale = await Sale.findOne({ _id: req.params.id, isDeleted: { $ne: true } });
+    const query = { _id: req.params.id, isDeleted: { $ne: true } };
+    // Cashiers can only complete their own sales
+    if (req.user.role === 'cashier') {
+      query.createdBy = req.user._id;
+    }
+
+    const sale = await Sale.findOne(query);
     if (!sale) {
       return res.status(404).json({ success: false, message: 'Sale not found', errors: ['Sale not found'] });
     }
