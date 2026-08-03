@@ -77,9 +77,12 @@ inventorySchema.post('save', async function (doc, next) {
 // Also sync on findOneAndUpdate
 inventorySchema.post('findOneAndUpdate', async function (doc, next) {
   try {
-    if (doc && doc.product) {
-      const Product = mongoose.model('Product');
-      await Product.findByIdAndUpdate(doc.product, { stock: doc.quantity }, { runValidators: false });
+    if (doc && doc._id) {
+      const updatedInv = await this.model.findById(doc._id);
+      if (updatedInv && updatedInv.product) {
+        const Product = mongoose.model('Product');
+        await Product.findByIdAndUpdate(updatedInv.product, { stock: updatedInv.quantity }, { runValidators: false });
+      }
     }
     next();
   } catch (error) {

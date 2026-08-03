@@ -12,13 +12,11 @@ const productSchema = new mongoose.Schema(
     sku: {
       type: String,
       required: [true, 'Please provide a SKU'],
-      unique: true,
       trim: true,
       uppercase: true,
     },
     barcode: {
       type: String,
-      unique: true,
       sparse: true,
       trim: true,
       uppercase: true,
@@ -92,6 +90,16 @@ productSchema.pre('save', function (next) {
   }
   next();
 });
+
+// Partial indexes for soft delete support
+productSchema.index(
+  { sku: 1 },
+  { unique: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+);
+productSchema.index(
+  { barcode: 1 },
+  { unique: true, sparse: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+);
 
 // ═══════════════════════════════════════════════════════════════
 // Auto-sync: After saving Product, create/update Inventory record

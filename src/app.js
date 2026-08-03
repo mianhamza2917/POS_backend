@@ -24,35 +24,48 @@ const reportRoutes = require('./routes/reportRoutes');
 const profileRoutes = require('./routes/profileRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 
+const { apiRateLimiter } = require('./middleware/rateLimitMiddleware');
+
 const app = express();
 
 // Security middleware
 app.use(helmet());
 
+// Apply global API rate limiting
+app.use('/api', apiRateLimiter);
+
 // CORS middleware
-// VERCEL-SPECIFIC: CORS is configured to allow all origins in development.
-// In production, set CORS_ORIGIN env var in Vercel dashboard to restrict access.
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : ['http://localhost:3000'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl) or if origin is in whitelist
+      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
 
 // Body parser middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Logging middleware
-// VERCEL-SPECIFIC: Use 'combined' format in production for better logging
 app.use(process.env.NODE_ENV === 'production' ? morgan('combined') : morgan('dev'));
 
 // Serve uploaded files statically
-// VERCEL-SPECIFIC: Vercel has an ephemeral filesystem — uploaded files are lost
-// after deployment. The uploads directory may not exist on Vercel.
-// Files should be stored on external services (S3, Cloudinary) in production.
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (fs.existsSync(uploadsDir)) {
-  app.use('/uploads', express.static('uploads'));
+  app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 }
 
 // Health check route
@@ -61,6 +74,13 @@ app.get('/', (req, res) => {
     success: true,
     message: 'API is running',
     version: '1.0.0',
+  });
+});
+
+app.get('/api/test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Vercel Test Route Working',
   });
 });
 
@@ -77,8 +97,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// VERCEL-SPECIFIC: Essential for serverless — ensures Vercel doesn't
-// try to handle static files that don't exist
+// Catch-all 404 handler for API routes
 app.use('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
@@ -98,10 +117,3 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 module.exports = app;
-
-app.get("/api/test", (req, res) => {
-  res.json({
-    success: true,
-    message: "Vercel Test Route Working"
-  });
-});

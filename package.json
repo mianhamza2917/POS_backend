@@ -6,14 +6,14 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed":"node seeds/index.js",
-    "db:cleanup":"node scripts/cleanupDatabase.js",
+    "seed": "node seeds/index.js",
+    "db:cleanup": "node scripts/cleanupDatabase.js",
     "vercel-build": "echo 'Build complete'",
     "vercel": "vercel"
   },
   "engines": {
-  "node": "20.x"
-},
+    "node": "20.x"
+  },
   "keywords": [
     "nodejs",
     "express",
@@ -25,9 +25,11 @@
   "license": "ISC",
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "cloudinary": "^2.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.6.1",
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
@@ -40,4 +42,3 @@
     "nodemon": "^3.1.14"
   }
 }
-

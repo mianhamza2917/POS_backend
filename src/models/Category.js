@@ -7,7 +7,6 @@ const categorySchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide a category name'],
       trim: true,
-      unique: true,
       maxlength: [FIELD_LENGTHS.CATEGORY_NAME_MAX, 'Category name cannot be more than 50 characters'],
     },
     description: {
@@ -38,6 +37,12 @@ const categorySchema = new mongoose.Schema(
   {
     timestamps: true,
   }
+);
+
+// Partial index for soft delete support
+categorySchema.index(
+  { name: 1 },
+  { unique: true, partialFilterExpression: { isDeleted: { $ne: true } } }
 );
 
 module.exports = mongoose.model('Category', categorySchema);

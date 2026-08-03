@@ -34,6 +34,29 @@ const pickPaymentFields = (s) => ({
   cashOnDelivery: s.cashOnDelivery,
 });
 
+// ---------- Public Display Settings ----------
+
+// @desc    Get public display settings (for cashier and general app UI)
+// @route   GET /api/settings/public
+// @access  Public / Private (Staff)
+const getPublicSettings = async (req, res, next) => {
+  try {
+    const settings = await Settings.getOrCreate();
+
+    res.status(200).json({
+      success: true,
+      message: 'Public display settings retrieved successfully',
+      data: {
+        ...pickBusinessFields(settings),
+        ...pickTaxFields(settings),
+        ...pickInvoiceFields(settings),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ---------- Business Settings ----------
 
 // @desc    Get business settings
@@ -290,6 +313,7 @@ const updatePaymentMethods = async (req, res, next) => {
 };
 
 module.exports = {
+  getPublicSettings,
   getBusinessSettings,
   updateBusinessSettings,
   uploadBusinessLogo,

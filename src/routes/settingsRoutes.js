@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getPublicSettings,
   getBusinessSettings,
   updateBusinessSettings,
   uploadBusinessLogo,
@@ -22,6 +23,9 @@ const {
 } = require('../validators/settingsValidators');
 
 const mgmtRoles = authorize('admin', 'manager');
+
+// Public/Staff Display Settings (accessible by all authenticated staff)
+router.get('/public', protect, getPublicSettings);
 
 // Business Settings
 router.get('/business', protect, mgmtRoles, getBusinessSettings);

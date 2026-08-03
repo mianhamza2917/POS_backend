@@ -54,10 +54,11 @@ const createSale = async (req, res, next) => {
         total,
       });
 
-      // Defer inventory save: mark for deduction after all validations pass
+      // Mark for atomic deduction
       inventoryUpdates.push({
-        inventory,
-        newQuantity: inventory.quantity - item.quantity,
+        inventoryId: inventory._id,
+        productName: product.name,
+        quantity: item.quantity,
       });
     }
 
@@ -65,13 +66,40 @@ const createSale = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Discount amount cannot exceed subtotal', errors: ['Discount exceeds subtotal'] });
     }
 
-const totalAmount = subtotal - discountAmount + taxAmount;
+    const totalAmount = subtotal - discountAmount + taxAmount;
     if (totalAmount < 0) {
       return res.status(400).json({ success: false, message: 'Total amount cannot be negative', errors: ['Invalid total amount'] });
     }
+
+    // Apply atomic inventory deductions BEFORE creating the sale record
+    const appliedDeductions = [];
+    for (const upd of inventoryUpdates) {
+      const updatedInv = await Inventory.findOneAndUpdate(
+        { _id: upd.inventoryId, quantity: { $gte: upd.quantity }, isDeleted: { $ne: true } },
+        { $inc: { quantity: -upd.quantity }, $set: { updatedBy: req.user._id } },
+        { new: true }
+      );
+
+      if (!updatedInv) {
+        // Rollback previously applied deductions
+        for (const done of appliedDeductions) {
+          await Inventory.findOneAndUpdate(
+            { _id: done.inventoryId },
+            { $inc: { quantity: done.quantity } }
+          );
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Stock update failed due to concurrent activity for: ${upd.productName}`,
+          errors: [`Stock update failed for: ${upd.productName}`],
+        });
+      }
+      appliedDeductions.push(upd);
+    }
+
     const invoiceNumber = await generateInvoiceNumber();
 
-    // Create sale
+    // Create sale record
     const sale = await Sale.create({
       invoiceNumber,
       customer: customer || null,
@@ -87,13 +115,6 @@ const totalAmount = subtotal - discountAmount + taxAmount;
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
-
-    // Apply deferred inventory deductions after sale is created
-    for (const upd of inventoryUpdates) {
-      upd.inventory.quantity = upd.newQuantity;
-      upd.inventory.updatedBy = req.user._id;
-      await upd.inventory.save();
-    }
 
     const populated = await Sale.findById(sale._id)
       .populate('customer', 'name phone email')

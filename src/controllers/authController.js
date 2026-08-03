@@ -238,17 +238,17 @@ const forgotPassword = async (req, res) => {
       console.error('Password reset email failed to send:', emailError.message);
     }
 
-    if (emailSent) {
+    if (emailSent || process.env.NODE_ENV === 'production') {
       return res.status(HTTP_STATUS.OK).json({
         success: true,
-        message: 'Password reset link sent to your email',
+        message: 'If a matching account exists, password reset instructions have been sent.',
       });
     }
 
-    // Fallback: return the token directly (useful when SMTP is not configured)
+    // Development-only fallback when SMTP is not configured
     return res.status(HTTP_STATUS.OK).json({
       success: true,
-      message: 'Password reset token generated (email unavailable — use link below)',
+      message: 'Password reset token generated (Dev Mode — email unavailable)',
       data: {
         resetToken,
         resetUrl,

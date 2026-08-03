@@ -11,7 +11,6 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: [true, 'Please provide an email'],
-    unique: true,
     lowercase: true,
     trim: true,
     match: [
@@ -73,6 +72,15 @@ const userSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 });
+
+// Partial index for soft delete support
+userSchema.index(
+  { email: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } },
+  }
+);
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
