@@ -27,14 +27,46 @@ const getCustomers = async (req, res, next) => {
       Customer.countDocuments(query),
     ]);
 
+    const customerIds = customers.map((c) => c._id);
+    const Sale = require('../models/Sale');
+    const salesAgg = await Sale.aggregate([
+      { $match: { isDeleted: { $ne: true }, customer: { $in: customerIds } } },
+      {
+        $group: {
+          _id: '$customer',
+          totalSpent: { $sum: '$totalAmount' },
+          totalOrders: { $sum: 1 },
+          lastOrderDate: { $max: '$createdAt' },
+        },
+      },
+    ]);
+
+    const salesMap = {};
+    salesAgg.forEach((s) => {
+      if (s._id) {
+        salesMap[s._id.toString()] = s;
+      }
+    });
+
+    const enrichedCustomers = customers.map((c) => {
+      const obj = c.toObject();
+      const stats = salesMap[c._id.toString()] || { totalSpent: 0, totalOrders: 0, lastOrderDate: null };
+      return {
+        ...obj,
+        totalSpent: stats.totalSpent,
+        totalOrders: stats.totalOrders,
+        lastOrderDate: stats.lastOrderDate,
+      };
+    });
+
     res.status(200).json({
       success: true,
       message: 'Customers retrieved successfully',
-      count: customers.length,
+      count: enrichedCustomers.length,
       total,
       page: pageNum,
       pages: Math.ceil(total / limitNum),
-      data: customers,
+      data: enrichedCustomers,
     });
   } catch (error) {
     next(error);
@@ -54,7 +86,28 @@ const getCustomerById = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Customer not found', errors: ['Customer not found'] });
     }
 
-    res.status(200).json({ success: true, message: 'Customer retrieved successfully', data: customer });
+    const Sale = require('../models/Sale');
+    const statsAgg = await Sale.aggregate([
+      { $match: { isDeleted: { $ne: true }, customer: customer._id } },
+      {
+        $group: {
+          _id: '$customer',
+          totalSpent: { $sum: '$totalAmount' },
+          totalOrders: { $sum: 1 },
+          lastOrderDate: { $max: '$createdAt' },
+        },
+      },
+    ]);
+
+    const stats = statsAgg[0] || { totalSpent: 0, totalOrders: 0, lastOrderDate: null };
+    const enriched = {
+      ...customer.toObject(),
+      totalSpent: stats.totalSpent,
+      totalOrders: stats.totalOrders,
+      lastOrderDate: stats.lastOrderDate,
+    };
+
+    res.status(200).json({ success: true, message: 'Customer retrieved successfully', data: enriched });
   } catch (error) {
     next(error);
   }

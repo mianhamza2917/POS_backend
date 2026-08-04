@@ -42,7 +42,7 @@ const categorySchema = new mongoose.Schema(
 // Partial index for soft delete support
 categorySchema.index(
   { name: 1 },
-  { unique: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+  { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 
 module.exports = mongoose.model('Category', categorySchema);

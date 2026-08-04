@@ -21,23 +21,31 @@ const createSaleValidator = [
     .isFloat({ min: 0 })
     .withMessage('Item discount cannot be negative'),
   body('customer')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isMongoId()
     .withMessage('Invalid customer ID'),
   body('discountAmount')
-    .optional()
+    .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage('Discount cannot be negative'),
   body('taxAmount')
-    .optional()
+    .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage('Tax cannot be negative'),
+  body('amountPaid')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 })
+    .withMessage('Amount paid cannot be negative'),
+  body('changeAmount')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 })
+    .withMessage('Change amount cannot be negative'),
   body('paymentMethod')
-    .optional()
+    .optional({ nullable: true })
     .isIn(['cash', 'card', 'online', 'other'])
     .withMessage('Invalid payment method'),
   body('notes')
-    .optional()
+    .optional({ nullable: true })
     .trim()
     .isLength({ max: 500 })
     .withMessage('Notes cannot be more than 500 characters'),

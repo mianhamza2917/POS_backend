@@ -40,6 +40,8 @@ const saleSchema = new mongoose.Schema(
     discountAmount: { type: Number, default: 0, min: 0 },
     taxAmount: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number, required: true, min: 0 },
+    amountPaid: { type: Number, default: 0, min: 0 },
+    changeAmount: { type: Number, default: 0, min: 0 },
     profit: { type: Number, default: 0 },
     paymentMethod: {
       type: String,

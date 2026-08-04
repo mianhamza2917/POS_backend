@@ -13,7 +13,7 @@ const ALLOWED_SORT_FIELDS = SORT_FIELDS.SALES;
 // @access  Private (Admin, Manager, Cashier)
 const createSale = async (req, res, next) => {
   try {
-    const { customer, items, discountAmount = 0, taxAmount = 0, paymentMethod, notes } = req.body;
+    const { customer, items, discountAmount = 0, taxAmount = 0, paymentMethod, notes, amountPaid, changeAmount } = req.body;
 
     let subtotal = 0;
     let profit = 0;
@@ -71,6 +71,41 @@ const createSale = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Total amount cannot be negative', errors: ['Invalid total amount'] });
     }
 
+    const finalPaymentMethod = paymentMethod || PAYMENT_METHODS.CASH;
+
+    const Settings = require('../models/Settings');
+    const settings = await Settings.getOrCreate();
+    const methodSettingKeyMap = {
+      cash: 'cash',
+      card: 'card',
+      online: 'onlinePayment',
+      other: 'bankTransfer',
+    };
+    const settingKey = methodSettingKeyMap[finalPaymentMethod];
+    if (settingKey && settings[settingKey] === false) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment method '${finalPaymentMethod}' is currently disabled in settings`,
+        errors: [`Disabled payment method: ${finalPaymentMethod}`],
+      });
+    }
+
+    const calcAmountPaid = amountPaid !== undefined && amountPaid !== null && !isNaN(Number(amountPaid))
+      ? Number(amountPaid)
+      : totalAmount;
+
+    if (finalPaymentMethod === PAYMENT_METHODS.CASH && calcAmountPaid < totalAmount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount paid cannot be less than total amount',
+        errors: ['Amount paid is insufficient'],
+      });
+    }
+
+    const calcChangeAmount = changeAmount !== undefined && changeAmount !== null && !isNaN(Number(changeAmount))
+      ? Number(changeAmount)
+      : Math.max(0, calcAmountPaid - totalAmount);
+
     // Apply atomic inventory deductions BEFORE creating the sale record
     const appliedDeductions = [];
     for (const upd of inventoryUpdates) {
@@ -115,8 +150,10 @@ const createSale = async (req, res, next) => {
       discountAmount,
       taxAmount,
       totalAmount,
+      amountPaid: calcAmountPaid,
+      changeAmount: calcChangeAmount,
       profit,
-      paymentMethod: paymentMethod || PAYMENT_METHODS.CASH,
+      paymentMethod: finalPaymentMethod,
       notes,
       branchId: req.user.branchId || 'main',
       createdBy: req.user._id,
@@ -138,7 +175,7 @@ const createSale = async (req, res, next) => {
 // @access  Private (Admin, Manager, Cashier)
 const getSales = async (req, res, next) => {
   try {
-    const { search, customer, paymentMethod, paymentStatus, startDate, endDate, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const { search, customer, paymentMethod, paymentStatus, startDate, endDate, createdBy, cashier, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     const { pageNum, limitNum, skip } = parsePagination(req.query);
     const sort = parseSort(sortBy, sortOrder, ALLOWED_SORT_FIELDS);
 
@@ -146,6 +183,8 @@ const getSales = async (req, res, next) => {
     // Cashiers can only view their own sales history
     if (req.user.role === 'cashier') {
       query.createdBy = req.user._id;
+    } else if (createdBy || cashier) {
+      query.createdBy = createdBy || cashier;
     }
     if (search) query.$or = [{ invoiceNumber: { $regex: search, $options: 'i' } }];
     if (customer) query.customer = customer;

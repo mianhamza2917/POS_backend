@@ -28,8 +28,12 @@ const { apiRateLimiter } = require('./middleware/rateLimitMiddleware');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
+// Security middleware — allow cross-origin resource access for uploaded images/media
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // Apply global API rate limiting
 app.use('/api', apiRateLimiter);

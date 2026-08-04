@@ -91,15 +91,11 @@ const settingsSchema = new mongoose.Schema({
   },
   onlinePayment: {
     type: Boolean,
-    default: false,
+    default: true,
   },
   bankTransfer: {
     type: Boolean,
-    default: false,
-  },
-  cashOnDelivery: {
-    type: Boolean,
-    default: false,
+    default: true,
   },
 }, {
   timestamps: true,
