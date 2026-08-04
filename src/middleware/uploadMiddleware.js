@@ -21,33 +21,30 @@ if (hasCloudinary) {
 
 const isVercel = !!process.env.VERCEL;
 
-// Ensure upload directories exist for local development
+// Ensure upload directories exist for local disk storage
 const ensureDir = (dir) => {
-  if (isVercel || hasCloudinary) return;
   const fullPath = path.join(__dirname, '..', '..', dir);
   if (!fs.existsSync(fullPath)) {
     fs.mkdirSync(fullPath, { recursive: true });
   }
 };
 
-// Use memoryStorage if running on Vercel or Cloudinary is active; diskStorage locally
-const storageEngine = (isVercel || hasCloudinary)
-  ? multer.memoryStorage()
-  : multer.diskStorage({
-      destination: (req, file, cb) => {
-        const dest = file.fieldname === 'photo' ? UPLOAD.PROFILE_PATH : UPLOAD.LOGO_PATH;
-        ensureDir(dest);
-        cb(null, path.join(__dirname, '..', '..', dest));
-      },
-      filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const prefix = file.fieldname === 'photo' ? 'profile' : 'logo';
-        const userId = file.fieldname === 'photo' && req.user ? req.user._id : 'unknown';
-        const timestamp = Date.now();
-        const idPart = file.fieldname === 'photo' ? `-${userId}` : '';
-        cb(null, `${prefix}${idPart}-${timestamp}${ext}`);
-      },
-    });
+// Always use local disk storage under uploads/
+const storageEngine = multer.diskStorage({
+  destination: (req, file, cb) => {
+    let dest = UPLOAD.PROFILE_PATH;
+    if (file.fieldname === 'logo') dest = UPLOAD.LOGO_PATH;
+    else if (file.fieldname === 'product' || file.fieldname === 'image') dest = 'uploads/products';
+    ensureDir(dest);
+    cb(null, path.join(__dirname, '..', '..', dest));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const prefix = file.fieldname || 'upload';
+    const timestamp = Date.now();
+    cb(null, `${prefix}-${timestamp}${ext}`);
+  },
+});
 
 const fileFilter = (req, file, cb) => {
   if (UPLOAD.ALLOWED_TYPES.includes(file.mimetype)) {
@@ -55,7 +52,7 @@ const fileFilter = (req, file, cb) => {
   } else {
     cb(
       new Error(
-        `Invalid file type. Allowed types: ${UPLOAD.ALLOWED_TYPES.map((t) => t.split('/')[1]).join(', ')}`
+        `Invalid file type. Allowed types: JPEG, PNG, WebP`
       ),
       false
     );
@@ -74,39 +71,15 @@ const uploadLogo = multer({
   fileFilter,
 }).single('logo');
 
-// Helper to upload buffer to Cloudinary
-const uploadToCloudinary = (fileBuffer, folder) => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: `pos-system/${folder}` },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }
-    );
-    uploadStream.end(fileBuffer);
-  });
-};
+const uploadProduct = multer({
+  storage: storageEngine,
+  limits: { fileSize: UPLOAD.MAX_FILE_SIZE },
+  fileFilter,
+}).single('image');
 
-// Helper to delete file (local disk or Cloudinary)
+// Helper to delete local file
 const deleteFile = async (filePath) => {
-  if (!filePath) return;
-
-  if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
-    if (hasCloudinary) {
-      try {
-        // Extract Cloudinary public_id from URL
-        const parts = filePath.split('/');
-        const filenameWithExt = parts[parts.length - 1];
-        const folder = parts[parts.length - 2];
-        const publicId = `pos-system/${folder}/${filenameWithExt.split('.')[0]}`;
-        await cloudinary.uploader.destroy(publicId);
-      } catch (err) {
-        console.error('Failed to delete Cloudinary file:', err.message);
-      }
-    }
-    return;
-  }
+  if (!filePath || filePath.startsWith('http://') || filePath.startsWith('https://')) return;
 
   const absolutePath = path.join(__dirname, '..', '..', filePath);
   if (fs.existsSync(absolutePath)) {
@@ -134,43 +107,22 @@ const handleMulterError = (err, res) => {
 };
 
 const handleProfileUpload = (req, res, next) => {
-  uploadProfile(req, res, async (err) => {
+  uploadProfile(req, res, (err) => {
     if (err) return handleMulterError(err, res);
-    if (!req.file) return next();
-
-    if (hasCloudinary && req.file.buffer) {
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, 'profiles');
-        req.file.filename = result.secure_url;
-      } catch (cloudErr) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload image to cloud storage',
-          errors: [cloudErr.message],
-        });
-      }
-    }
     next();
   });
 };
 
 const handleLogoUpload = (req, res, next) => {
-  uploadLogo(req, res, async (err) => {
+  uploadLogo(req, res, (err) => {
     if (err) return handleMulterError(err, res);
-    if (!req.file) return next();
+    next();
+  });
+};
 
-    if (hasCloudinary && req.file.buffer) {
-      try {
-        const result = await uploadToCloudinary(req.file.buffer, 'logos');
-        req.file.filename = result.secure_url;
-      } catch (cloudErr) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to upload logo to cloud storage',
-          errors: [cloudErr.message],
-        });
-      }
-    }
+const handleProductUpload = (req, res, next) => {
+  uploadProduct(req, res, (err) => {
+    if (err) return handleMulterError(err, res);
     next();
   });
 };
@@ -178,5 +130,6 @@ const handleLogoUpload = (req, res, next) => {
 module.exports = {
   handleProfileUpload,
   handleLogoUpload,
+  handleProductUpload,
   deleteFile,
 };

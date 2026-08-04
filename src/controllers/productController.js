@@ -1,4 +1,5 @@
 const Product = require('../models/Product');
+const Inventory = require('../models/Inventory');
 const { parsePagination, parseSort } = require('../utils/queryHelper');
 const { SORT_FIELDS, PRODUCT_STATUSES } = require('../utils/constants');
 
@@ -93,11 +94,29 @@ const createProduct = async (req, res, next) => {
     }
 
     const product = await Product.create({
-      name, sku, barcode, category, price, costPrice, stock, description, image,
+      name, sku, barcode, category, price, costPrice, stock: stock || 0, description, image,
       branchId: req.user.branchId || 'main',
       createdBy: req.user._id,
       updatedBy: req.user._id,
     });
+
+    // Automatically sync / create corresponding Inventory record
+    await Inventory.findOneAndUpdate(
+      { product: product._id },
+      {
+        $set: {
+          product: product._id,
+          quantity: stock || 0,
+          location: 'Main Store',
+          lowStockThreshold: 10,
+          branchId: req.user.branchId || 'main',
+          isDeleted: false,
+          createdBy: req.user._id,
+          updatedBy: req.user._id,
+        },
+      },
+      { upsert: true, new: true }
+    );
 
     res.status(201).json({ success: true, message: 'Product created successfully', data: product });
   } catch (error) {
@@ -153,7 +172,7 @@ const updateProduct = async (req, res, next) => {
     if (stock !== undefined) product.stock = stock;
     if (description !== undefined) product.description = description;
     if (image !== undefined) product.image = image;
-if (status !== undefined) {
+    if (status !== undefined) {
       if (!PRODUCT_STATUSES.ALL.includes(status)) {
         return res.status(400).json({ success: false, message: `Invalid status value`, errors: [`Status must be ${PRODUCT_STATUSES.ALL.join(', ')}`] });
       }
@@ -163,6 +182,16 @@ if (status !== undefined) {
 
     // Use save() to trigger pre-save hooks (auto-update status based on stock)
     await product.save();
+
+    // Sync inventory stock
+    if (stock !== undefined) {
+      await Inventory.findOneAndUpdate(
+        { product: product._id },
+        { $set: { quantity: stock, updatedBy: req.user._id } },
+        { upsert: true }
+      );
+    }
+
     const populated = await Product.populate(product, { path: 'category', select: 'name' });
 
     res.status(200).json({ success: true, message: 'Product updated successfully', data: populated });
@@ -186,6 +215,12 @@ const deleteProduct = async (req, res, next) => {
     product.deletedAt = new Date();
     product.updatedBy = req.user._id;
     await product.save();
+
+    // Soft delete corresponding Inventory record
+    await Inventory.findOneAndUpdate(
+      { product: product._id },
+      { $set: { isDeleted: true, deletedAt: new Date(), updatedBy: req.user._id } }
+    );
 
     res.status(200).json({ success: true, message: 'Product deleted successfully', data: {} });
   } catch (error) {
@@ -213,6 +248,13 @@ const updateStock = async (req, res, next) => {
     product.stock = stock;
     product.updatedBy = req.user._id;
     await product.save();
+
+    // Sync inventory quantity
+    await Inventory.findOneAndUpdate(
+      { product: product._id },
+      { $set: { quantity: stock, updatedBy: req.user._id } },
+      { upsert: true }
+    );
 
     res.status(200).json({ success: true, message: 'Stock updated successfully', data: product });
   } catch (error) {

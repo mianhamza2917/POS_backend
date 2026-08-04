@@ -78,7 +78,7 @@ userSchema.index(
   { email: 1 },
   {
     unique: true,
-    partialFilterExpression: { isDeleted: { $ne: true } },
+    partialFilterExpression: { isDeleted: false },
   }
 );
 

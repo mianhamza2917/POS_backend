@@ -94,6 +94,13 @@ const createSale = async (req, res, next) => {
           errors: [`Stock update failed for: ${upd.productName}`],
         });
       }
+      // Also update product stock to reflect inventory deduction
+      const prod = await Product.findById(updatedInv.product);
+      if (prod) {
+        prod.stock = Math.max(0, prod.stock - upd.quantity);
+        await prod.save();
+      }
+
       appliedDeductions.push(upd);
     }
 

@@ -1,23 +1,16 @@
 const Sale = require('../models/Sale');
-const { INVOICE } = require('./constants');
+const Settings = require('../models/Settings');
 
 const generateInvoiceNumber = async () => {
-  const now = new Date();
+  const settings = await Settings.getOrCreate();
+  const prefix = settings.invoicePrefix !== undefined ? settings.invoicePrefix : 'INV-';
+  const startNum = Number(settings.startingInvoiceNumber) || 1;
 
-  // Build dateStr from a stable copy BEFORE any mutation
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const dateStr = `${year}${month}${day}`;
+  const totalSalesCount = await Sale.countDocuments({});
+  const nextSeq = startNum + totalSalesCount;
+  const seqStr = String(nextSeq).padStart(4, '0');
 
-  // Build start/end of day using separate Date objects (no mutation of 'now')
-  const startOfDay = new Date(year, now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const endOfDay = new Date(year, now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-  const count = await Sale.countDocuments({ createdAt: { $gte: startOfDay, $lte: endOfDay } });
-  const seq = String(count + 1).padStart(INVOICE.SEQUENCE_PAD, '0');
-
-  return `${INVOICE.PREFIX}${dateStr}-${seq}`;
+  return `${prefix}${seqStr}`;
 };
 
 module.exports = { generateInvoiceNumber };

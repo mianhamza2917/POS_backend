@@ -17,7 +17,6 @@ const productSchema = new mongoose.Schema(
     },
     barcode: {
       type: String,
-      sparse: true,
       trim: true,
       uppercase: true,
     },
@@ -94,11 +93,11 @@ productSchema.pre('save', function (next) {
 // Partial indexes for soft delete support
 productSchema.index(
   { sku: 1 },
-  { unique: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+  { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 productSchema.index(
   { barcode: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+  { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 
 // ═══════════════════════════════════════════════════════════════

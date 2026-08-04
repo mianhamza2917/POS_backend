@@ -187,7 +187,7 @@ const updateUser = async (req, res, next) => {
     }
 
     // Update allowed fields
-    const { name, email, role, branchId } = req.body;
+    const { name, email, role, branchId, isDisabled } = req.body;
     if (name) targetUser.name = name;
     if (email) {
       // Check email uniqueness (exclude soft-deleted users and current user)
@@ -208,6 +208,7 @@ const updateUser = async (req, res, next) => {
     }
     if (role) targetUser.role = role;
     if (branchId) targetUser.branchId = branchId;
+    if (isDisabled !== undefined) targetUser.isDisabled = Boolean(isDisabled);
     if (req.body.password) targetUser.password = req.body.password;
     targetUser.updatedBy = req.user._id;
 

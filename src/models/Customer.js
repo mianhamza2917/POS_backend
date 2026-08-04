@@ -13,7 +13,6 @@ const customerSchema = new mongoose.Schema(
       type: String,
       lowercase: true,
       trim: true,
-      sparse: true,
       match: [
         EMAIL_REGEX,
         'Please provide a valid email address',
@@ -23,7 +22,6 @@ const customerSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please provide customer phone number'],
       trim: true,
-      sparse: true,
     },
     address: {
       type: String,
@@ -63,11 +61,11 @@ const customerSchema = new mongoose.Schema(
 // Partial indexes for soft delete support
 customerSchema.index(
   { phone: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+  { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 customerSchema.index(
   { email: 1 },
-  { unique: true, sparse: true, partialFilterExpression: { isDeleted: { $ne: true } } }
+  { unique: true, partialFilterExpression: { isDeleted: false } }
 );
 
 module.exports = mongoose.model('Customer', customerSchema);

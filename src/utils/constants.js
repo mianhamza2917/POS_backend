@@ -174,7 +174,7 @@ const ERROR_MSGS = {
   SERVER_ERROR: 'Internal Server Error',
   DUPLICATE_FIELD: (field) => `${field} already exists`,
   INVALID_CREDENTIALS: 'Invalid email or password',
-  ACCOUNT_DISABLED: 'Account is disabled. Please contact administrator.',
+  ACCOUNT_DISABLED: 'Your account has been disabled. Please contact the administrator.',
   USER_NOT_FOUND: 'User not found or account removed',
 };
 Object.freeze(ERROR_MSGS);

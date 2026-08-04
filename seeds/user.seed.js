@@ -25,27 +25,6 @@ const users = [
     role: 'admin',
     branchId: 'main',
   },
-  {
-    name: 'New Admin',
-    email: 'newadmin@pos.com',
-    password: 'NewAdmin@123',
-    role: 'admin',
-    branchId: 'main',
-  },
-  {
-    name: 'Manager User',
-    email: 'manager@pos.com',
-    password: 'ManagerPass123',
-    role: 'manager',
-    branchId: 'main',
-  },
-  {
-    name: 'Cashier User',
-    email: 'cashier@pos.com',
-    password: 'CashierPass123',
-    role: 'cashier',
-    branchId: 'main',
-  },
 ];
 
 const seedUsers = async () => {
